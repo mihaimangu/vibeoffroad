@@ -20,6 +20,8 @@
   "license": "ISC",
   "dependencies": {
     "@types/three": "^0.175.0",
+    "cannon-es": "^0.20.0",
+    "cannon-es-debugger": "^1.0.0",
     "three": "^0.175.0"
   },
   "devDependencies": {

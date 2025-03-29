@@ -1,60 +1,116 @@
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import { PhysicsMaterials } from '../core/physicsSetup';
 
-export function createCar(): THREE.Group {
+export interface CarPhysics { // To return physics components
+    chassisBody: CANNON.Body;
+    wheelBodies: CANNON.Body[];
+    // Constraints will be added later
+}
+
+export function createCar(world: CANNON.World, materials: PhysicsMaterials): {
+    mesh: THREE.Group;
+    physics: CarPhysics;
+} {
     // Create a simple placeholder car
-    const car = new THREE.Group();
+    const carGroup = new THREE.Group();
 
-    const bodyHeight = 0.6;
+    // --- Dimensions and Materials (adjusted slightly for physics) ---
+    const chassisWidth = 1.8;
+    const chassisHeight = 0.7;
+    const chassisLength = 4;
+    const chassisMass = 150; // Approximate mass in kg
+
     const wheelRadius = 0.4;
-    const wheelHeight = 0.3;
+    const wheelThickness = 0.3;
+    const wheelMass = 10;
 
-    // Car Body
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x0055ff, flatShading: false }); // Blue body
-    const bodyGeometry = new THREE.BoxGeometry(2, bodyHeight, 4); // width, height, length
-    const carBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    carBody.position.y = bodyHeight / 2 + wheelRadius; // Position based on wheel radius and body height
-    // Enable shadows for the body
-    // carBody.castShadow = true;
-    // carBody.receiveShadow = true; // Body can receive shadows from cabin
-    car.add(carBody);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x0055ff, flatShading: false });
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, flatShading: false });
+    const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, flatShading: false });
 
-    // Optional: Add a simple cabin
-    const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, flatShading: false }); // Light grey cabin
-    const cabinGeometry = new THREE.BoxGeometry(1.8, 0.8, 2.5); // Slightly smaller than body
-    const carCabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
-    // Position cabin relative to the top of the body
-    carCabin.position.set(0, carBody.position.y + bodyHeight / 2 + 0.8 / 2, -0.2);
-    // Enable shadows for the cabin
-    // carCabin.castShadow = true;
-    // carCabin.receiveShadow = false; // Cabin likely won't receive shadows
-    car.add(carCabin);
+    // --- Physics Shapes --- 
+    // Box shape uses half-extents
+    const chassisShape = new CANNON.Box(new CANNON.Vec3(chassisWidth / 2, chassisHeight / 2, chassisLength / 2));
+    // Using Sphere for wheels is often simpler for basic physics/collisions
+    const wheelShape = new CANNON.Sphere(wheelRadius); 
 
-    // Car Wheels
-    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, flatShading: false }); // Dark grey wheels
-    const wheelGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelHeight, 18); // Use constants
-    wheelGeometry.rotateZ(Math.PI / 2); // Rotate wheels to align correctly
+    // --- Chassis --- 
+    // Create Mesh
+    const bodyGeometry = new THREE.BoxGeometry(chassisWidth, chassisHeight, chassisLength); 
+    const carBodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    const chassisYOffset = wheelRadius + chassisHeight / 2; // Position chassis relative to ground based on wheels
+    carBodyMesh.position.y = chassisYOffset;
+    carGroup.add(carBodyMesh);
 
+    // Create Physics Body
+    const chassisBody = new CANNON.Body({
+        mass: chassisMass,
+        material: materials.carMaterial,
+        position: new CANNON.Vec3(0, chassisYOffset + 1.0, 0), // Start slightly above ground
+        shape: chassisShape
+    });
+    // Rotate chassis body if needed (if Box direction differs from Mesh)
+    world.addBody(chassisBody);
+
+    // --- Cabin (visual only for now) --- 
+    const cabinGeometry = new THREE.BoxGeometry(chassisWidth * 0.9, 0.8, chassisLength * 0.6);
+    const carCabinMesh = new THREE.Mesh(cabinGeometry, cabinMaterial);
+    carCabinMesh.position.set(0, carBodyMesh.position.y + chassisHeight / 2 + 0.8 / 2, -chassisLength * 0.1); 
+    carGroup.add(carCabinMesh);
+
+    // --- Wheels --- 
+    const wheelMeshes: THREE.Mesh[] = [];
+    const wheelBodies: CANNON.Body[] = [];
     const wheelPositions = [
-        new THREE.Vector3(-1.1, wheelRadius, 1.3),  // Front Left
-        new THREE.Vector3(1.1, wheelRadius, 1.3),   // Front Right
-        new THREE.Vector3(-1.1, wheelRadius, -1.3), // Rear Left
-        new THREE.Vector3(1.1, wheelRadius, -1.3)   // Rear Right
+        // Front Left 
+        new CANNON.Vec3(-chassisWidth / 2 - wheelThickness / 2, wheelRadius, chassisLength / 2 * 0.7), 
+        // Front Right
+        new CANNON.Vec3( chassisWidth / 2 + wheelThickness / 2, wheelRadius, chassisLength / 2 * 0.7), 
+        // Rear Left
+        new CANNON.Vec3(-chassisWidth / 2 - wheelThickness / 2, wheelRadius, -chassisLength / 2 * 0.7), 
+        // Rear Right
+        new CANNON.Vec3( chassisWidth / 2 + wheelThickness / 2, wheelRadius, -chassisLength / 2 * 0.7), 
     ];
 
-    wheelPositions.forEach(pos => {
-        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-        wheel.position.copy(pos);
-        // Enable shadows for wheels
-        // wheel.castShadow = true;
-        // wheel.receiveShadow = true; // Wheels can receive shadows
-        car.add(wheel);
+    // Create wheel mesh geometry once
+    const wheelMeshGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 18);
+    wheelMeshGeometry.rotateZ(Math.PI / 2); // Align with Cannon sphere/cylinder orientation
+
+    wheelPositions.forEach((pos, index) => {
+        // Create Mesh
+        const wheelMesh = new THREE.Mesh(wheelMeshGeometry, wheelMaterial);
+        // Position mesh visually relative to the carGroup origin
+        wheelMesh.position.set(pos.x, pos.y, pos.z);
+        // wheelMesh.castShadow = true;
+        wheelMeshes.push(wheelMesh);
+        carGroup.add(wheelMesh);
+
+        // Create Physics Body
+        const wheelBody = new CANNON.Body({
+            mass: wheelMass,
+            material: materials.wheelMaterial,
+            shape: wheelShape, 
+             // Position physics body in world space (relative to chassis body's initial position)
+            position: chassisBody.position.clone().vadd(pos) 
+        });
+        // Initial orientation for wheels (important for hinge constraints later)
+        wheelBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI / 2);
+        world.addBody(wheelBody);
+        wheelBodies.push(wheelBody);
     });
 
-    // Position the entire car group so wheels are on y=0
-    car.position.y = 0;
+    // Position the entire car visual group (initial visual position)
+    // This might not perfectly match physics start if chassisBody starts higher
+    carGroup.position.y = 0; 
 
     // TODO: Replace with actual GLTF model loading
-    // TODO: Add physics components (body, wheels)
+    // TODO: Add CANNON.RaycastVehicle or HingeConstraints for proper vehicle physics
 
-    return car;
+    const carPhysics: CarPhysics = {
+        chassisBody,
+        wheelBodies
+    };
+
+    return { mesh: carGroup, physics: carPhysics };
 } 

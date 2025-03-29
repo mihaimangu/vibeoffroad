@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import { PhysicsMaterials } from '../core/physicsSetup'; // Import the materials interface
 // Consider importing a noise library like 'simplex-noise' or use THREE.MathUtils for simple noise
 
 // Function to create a simple procedural grass texture
@@ -45,7 +47,10 @@ function createGrassTexture(): THREE.CanvasTexture {
     return texture;
 }
 
-export function createTerrain(): THREE.Mesh {
+export function createTerrain(world: CANNON.World, materials: PhysicsMaterials): {
+    mesh: THREE.Mesh;
+    body: CANNON.Body;
+} {
     const width = 200; // Increased size
     const height = 200; // Increased size
     const widthSegments = 100; // Increased segments for larger size
@@ -58,39 +63,71 @@ export function createTerrain(): THREE.Mesh {
     const positionAttribute = planeGeometry.getAttribute('position');
     const vertex = new THREE.Vector3();
     const noiseStrength = 0.3; // How bumpy the terrain is
+    const heightData: number[][] = [];
+    let row: number[] = [];
 
     for (let i = 0; i < positionAttribute.count; i++) {
         vertex.fromBufferAttribute(positionAttribute, i);
+        const heightOffset = (Math.sin(vertex.x * 0.1) * Math.cos(vertex.y * 0.1)) * noiseStrength;
+        const currentHeight = vertex.z + heightOffset;
+        positionAttribute.setZ(i, currentHeight);
 
-        // Simple pseudo-random noise based on vertex position
-        // Using a proper noise function (Simplex, Perlin) would be better
-        // Apply noise to the original Z value (which corresponds to Y-up in world space after rotation)
-        const heightOffset = (Math.sin(vertex.x * 0.1) * Math.cos(vertex.y * 0.1)) * noiseStrength; // Adjusted frequency for larger terrain
-
-        // Update the Z coordinate (height in the geometry's local space)
-        positionAttribute.setZ(i, vertex.z + heightOffset);
+        // Store height data for Cannon Heightfield
+        // Need to map the linear buffer index to 2D grid indices
+        const xIndex = i % (widthSegments + 1);
+        const yIndex = Math.floor(i / (widthSegments + 1));
+        if (xIndex === 0) { // Start of a new row
+            if (row.length > 0) {
+                 // Add previous row (reversed for Cannon's convention if needed - check docs)
+                heightData.push(row.reverse());
+            }
+            row = [];
+        }
+        row.push(currentHeight);
     }
-    planeGeometry.computeVertexNormals(); // Recalculate normals for correct lighting
+    // Add the last row
+    if (row.length > 0) {
+        heightData.push(row.reverse());
+    }
+    // Cannon needs the height data potentially reversed along one axis
+    heightData.reverse(); 
 
+    planeGeometry.computeVertexNormals(); // Recalculate normals for correct lighting
 
     const grassTexture = createGrassTexture();
 
     const planeMaterial = new THREE.MeshStandardMaterial({
         map: grassTexture,
-        // color: 0x664422, // Color is now driven by the texture map
-        roughness: 0.9, // More rough for a natural ground look
+        roughness: 0.9,
         metalness: 0.1,
         wireframe: false,
         side: THREE.DoubleSide
     });
-    const groundPlane = new THREE.Mesh(planeGeometry, planeMaterial);
-    groundPlane.rotation.x = -Math.PI / 2; // Rotate plane to be horizontal
-    groundPlane.position.y = 0; // Position at the base
-    // Allow the ground plane to receive shadows
-    // groundPlane.receiveShadow = true;
+    const groundPlaneMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+    groundPlaneMesh.rotation.x = -Math.PI / 2;
+    groundPlaneMesh.position.y = 0;
+    // groundPlaneMesh.receiveShadow = true;
+
+    // --- Create Cannon.js Body ---
+    const groundShape = new CANNON.Heightfield(heightData, {
+        elementSize: width / widthSegments // Distance between data points
+    });
+
+    const groundBody = new CANNON.Body({ 
+        mass: 0, // Static body
+        material: materials.groundMaterial 
+    });
+    groundBody.addShape(groundShape);
+    // Adjust position and rotation to match the Three.js mesh
+    // Heightfield is oriented differently, often needs rotation
+    groundBody.position.set(-width / 2, 0, height / 2); // Center the heightfield
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    
+    world.addBody(groundBody);
+    // --- End of Cannon.js Body ---
 
     // TODO: Use a better noise function (e.g., simplex-noise library)
     // TODO: Add more detailed textures (normal map, roughness map)
 
-    return groundPlane;
+    return { mesh: groundPlaneMesh, body: groundBody };
 } 
