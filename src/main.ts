@@ -10,6 +10,7 @@ import { createTerrain } from './entities/Terrain';
 import { createCar } from './entities/Car';
 import { createFences } from './entities/Fence';
 import { setupOrbitControls } from './controls/OrbitControlsSetup';
+import { VehicleControls } from './controls/VehicleControls'; // Import VehicleControls
 
 async function initializeGame() { // Wrap initialization in an async function
     // Initialize core components
@@ -20,7 +21,7 @@ async function initializeGame() { // Wrap initialization in an async function
 
     // Initialize physics debugger
     const cannonDebugger = CannonDebugger(scene, world, {
-        color: 0x00ff00, // Wireframe color
+        color: 0x0000ff, // Changed Wireframe color to blue
         scale: 1.0, // Optional: scale the debug meshes
     });
 
@@ -33,6 +34,8 @@ async function initializeGame() { // Wrap initialization in an async function
     const carData = await createCar(world, materials); // Use await here
     scene.add(carData.mesh); // Add the loaded GLTF scene
     const carChassisBody = carData.physics.chassisBody;
+    // Store the full physics data for controls
+    const carPhysics = carData.physics;
     // We no longer need direct references to visual wheel meshes/groups
 
     // Get terrain dimensions 
@@ -45,7 +48,11 @@ async function initializeGame() { // Wrap initialization in an async function
     // Fence bodies are static, no mesh syncing needed
 
     // Setup controls
-    const controls = setupOrbitControls(camera, renderer.domElement);
+    const orbitControls = setupOrbitControls(camera, renderer.domElement);
+    
+    // Setup Vehicle Controls
+    const vehicleControls = new VehicleControls();
+    vehicleControls.connect(carPhysics); // Connect to the car's physics data
 
     // --- Animation Loop --- 
     const clock = new THREE.Clock();
@@ -58,6 +65,9 @@ async function initializeGame() { // Wrap initialization in an async function
         const deltaTime = elapsedTime - oldElapsedTime;
         oldElapsedTime = elapsedTime;
 
+        // --- Update Vehicle Controls (before physics step) ---
+        vehicleControls.update(deltaTime);
+
         // --- Physics Step ---
         if (deltaTime > 0) {
             world.step(1 / 60, deltaTime, 3); 
@@ -69,8 +79,8 @@ async function initializeGame() { // Wrap initialization in an async function
         carData.mesh.quaternion.copy(carChassisBody.quaternion as any);
         // Individual wheel visual sync is not needed as they are part of the loaded model
         
-        // --- Update Controls --- 
-        controls.update(); 
+        // --- Update Orbit Controls --- 
+        orbitControls.update(); 
 
         // --- Update Debugger --- 
         cannonDebugger.update();

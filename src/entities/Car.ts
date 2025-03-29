@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 export interface CarPhysics { // To return physics components
     chassisBody: CANNON.Body;
     wheelBodies: CANNON.Body[];
-    // Constraints will be added later
+    wheelConstraints: CANNON.HingeConstraint[]; // Add constraints here
 }
 
 export async function createCar(world: CANNON.World, materials: PhysicsMaterials): Promise<{
@@ -32,34 +32,40 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
 
     // --- Dimensions (Estimates for Physics - adjust based on loaded model visuals) ---
     const chassisWidth = 1.8; // Estimate based on visual size
-    const chassisHeight = 0.7; // Estimate
+    const chassisHeight = 0.2; // --- Drastically Reduced Height Estimate --- 
     const chassisLength = 4.0; // Estimate
     const chassisMass = 150; 
 
-    const wheelRadius = 0.4; // Estimate
-    const wheelThickness = 0.3; // Used for visual positioning offset before
+    const wheelRadius = 0.35; // Keep previous adjustment (Adjust based on model)
+    // const wheelThickness = 0.3; 
     const wheelMass = 10;
 
     // --- Physics Shapes (Keep using simple primitives for now) --- 
+    // Use updated chassisHeight
     const chassisShape = new CANNON.Box(new CANNON.Vec3(chassisWidth / 2, chassisHeight / 2, chassisLength / 2));
+    // Use updated wheelRadius
     const wheelShape = new CANNON.Sphere(wheelRadius); 
 
     // --- Chassis Physics Body --- 
-    const chassisYOffset = wheelRadius; // Simplified offset for physics start
+    // Ensure the chassis starts high enough for wheels to be clear
+    // const chassisYOffset = wheelRadius + 0.15; // Previous calculation
+    const initialChassisY = wheelRadius + 0.8; // --- Set initial Y significantly higher --- 
     const chassisBody = new CANNON.Body({
         mass: chassisMass,
         material: materials.carMaterial,
-        position: new CANNON.Vec3(0, chassisYOffset + 1.0, 0), // Start slightly above ground
+        // Start position Y is now set directly, well above wheel centers
+        position: new CANNON.Vec3(0, initialChassisY, 0), 
         shape: chassisShape,
-        angularDamping: 0.5 // Add some damping
+        angularDamping: 0.5 
     });
     world.addBody(chassisBody);
 
     // --- Wheels Physics Bodies & Constraints --- 
     const wheelBodies: CANNON.Body[] = [];
-    // Pivot points relative to the chassis center (adjust if needed based on model)
+    const wheelConstraints: CANNON.HingeConstraint[] = []; // Initialize constraints array
+    // Pivot points relative to the chassis center (Use updated dimensions)
     const wheelPositions = [
-        new CANNON.Vec3(-chassisWidth / 2, 0, chassisLength / 2 * 0.7), 
+        new CANNON.Vec3(-chassisWidth / 2, 0, chassisLength / 2 * 0.7), // Y=0 relative to chassis center
         new CANNON.Vec3( chassisWidth / 2, 0, chassisLength / 2 * 0.7), 
         new CANNON.Vec3(-chassisWidth / 2, 0, -chassisLength / 2 * 0.7), 
         new CANNON.Vec3( chassisWidth / 2, 0, -chassisLength / 2 * 0.7), 
@@ -67,10 +73,11 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
     const wheelAxis = new CANNON.Vec3(1, 0, 0); // Hinge axis
 
     wheelPositions.forEach((pos, index) => {
-        // Calculate world position for the wheel body
+        // Calculate world position for the wheel body relative to the CHASSIS initial position
         const wheelWorldPos = chassisBody.position.clone().vadd(pos); 
-        // We don't offset Y here as the pivot is relative to chassis center Y=0
-        wheelWorldPos.y = wheelRadius; // But start the body at wheel radius height
+        // Set the wheel body's initial Y position explicitly based on radius
+        // This ensures wheels start near the ground plane, even if chassis starts higher
+        wheelWorldPos.y = wheelRadius; 
 
         const wheelBody = new CANNON.Body({
             mass: wheelMass,
@@ -90,13 +97,15 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
             axisB: wheelAxis
         });
         world.addConstraint(constraint);
+        wheelConstraints.push(constraint); // Store the constraint
     });
 
     // No need to position carMesh here, it will be synced in main.ts
 
     const carPhysics: CarPhysics = {
         chassisBody,
-        wheelBodies
+        wheelBodies,
+        wheelConstraints // Include constraints in the returned object
     };
 
     // Return the loaded mesh and the physics components

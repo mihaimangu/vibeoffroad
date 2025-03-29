@@ -43,9 +43,12 @@ export function setupPhysicsWorld(): { world: CANNON.World, materials: PhysicsMa
         groundMaterial,
         wheelMaterial,
         {
-            friction: 0.8,      // Higher friction for wheels on ground
+            friction: 0.7, // Increased friction slightly again
             restitution: 0.1,
-            contactEquationStiffness: 1000 // Helps prevent sinking
+            contactEquationStiffness: 1e8, // Keep stiff
+            contactEquationRelaxation: 2, // Allow a little relaxation (default 3)
+            frictionEquationStiffness: 1e8, // Keep stiff
+            frictionEquationRelaxation: 2 // Allow a little relaxation (default 3)
         }
     );
     world.addContactMaterial(groundWheelContactMaterial);
