@@ -62,14 +62,26 @@ export function createTerrain(world: CANNON.World, materials: PhysicsMaterials):
     // Add simple height variation (noise)
     const positionAttribute = planeGeometry.getAttribute('position');
     const vertex = new THREE.Vector3();
-    const noiseStrength = 0.3; // How bumpy the terrain is
+    const noiseScale1 = 0.05;
+    const noiseStrength1 = 1.5; // Lower frequency, higher impact bumps
+    const noiseScale2 = 0.2;
+    const noiseStrength2 = 0.4; // Higher frequency, smaller details
+    const noiseScale3 = 0.8;
+    const noiseStrength3 = 0.1; // Very high frequency, tiny roughness
+
     const heightData: number[][] = [];
     let row: number[] = [];
 
     for (let i = 0; i < positionAttribute.count; i++) {
         vertex.fromBufferAttribute(positionAttribute, i);
-        const heightOffset = (Math.sin(vertex.x * 0.1) * Math.cos(vertex.y * 0.1)) * noiseStrength;
-        const currentHeight = vertex.z + heightOffset;
+        
+        // Layered noise calculation
+        const noise1 = Math.sin(vertex.x * noiseScale1) * Math.cos(vertex.y * noiseScale1) * noiseStrength1;
+        const noise2 = Math.sin(vertex.x * noiseScale2) * Math.cos(vertex.y * noiseScale2) * noiseStrength2;
+        const noise3 = Math.sin(vertex.x * noiseScale3) * Math.cos(vertex.y * noiseScale3) * noiseStrength3;
+        
+        const heightOffset = noise1 + noise2 + noise3;
+        const currentHeight = vertex.z + heightOffset; // Apply offset to base height (which is 0 for PlaneGeometry)
         positionAttribute.setZ(i, currentHeight);
 
         // Store height data for Cannon Heightfield
