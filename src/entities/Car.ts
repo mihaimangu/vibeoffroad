@@ -31,14 +31,13 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
     // We will position this mesh group based on the physics body later
 
     // --- Dimensions (Estimates for Physics - adjust based on loaded model visuals) ---
-    const chassisWidth = 1.8; // Estimate based on visual size
-    const chassisHeight = 0.2; // --- Drastically Reduced Height Estimate --- 
-    const chassisLength = 4.0; // Estimate
-    const chassisMass = 150; 
+    const chassisWidth = 1.8;
+    const chassisHeight = 0.2; // Keep thin for clearance
+    const chassisLength = 4.0;
+    const chassisMass = 800; // --- Significantly Increased Mass ---
 
-    const wheelRadius = 0.35; // Keep previous adjustment (Adjust based on model)
-    // const wheelThickness = 0.3; 
-    const wheelMass = 10;
+    const wheelRadius = 0.35;
+    const wheelMass = 25; // --- Increased Wheel Mass ---
 
     // --- Physics Shapes (Keep using simple primitives for now) --- 
     // Use updated chassisHeight
@@ -47,15 +46,13 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
     const wheelShape = new CANNON.Sphere(wheelRadius); 
 
     // --- Chassis Physics Body --- 
-    // Ensure the chassis starts high enough for wheels to be clear
-    // const chassisYOffset = wheelRadius + 0.15; // Previous calculation
-    const initialChassisY = wheelRadius + 0.8; // --- Set initial Y significantly higher --- 
+    const initialChassisY = wheelRadius + 0.8; // Keep starting high for now
     const chassisBody = new CANNON.Body({
         mass: chassisMass,
         material: materials.carMaterial,
-        // Start position Y is now set directly, well above wheel centers
         position: new CANNON.Vec3(0, initialChassisY, 0), 
         shape: chassisShape,
+        linearDamping: 0.3, // --- Added Linear Damping ---
         angularDamping: 0.5 
     });
     world.addBody(chassisBody);
@@ -84,6 +81,7 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
             material: materials.wheelMaterial,
             shape: wheelShape, 
             position: wheelWorldPos,
+            linearDamping: 0.3, // --- Added Linear Damping ---
             angularDamping: 0.5 
         });
         world.addBody(wheelBody);
