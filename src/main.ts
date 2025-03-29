@@ -1,6 +1,7 @@
 // Entry point for the VibeOffroad game
 
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // Basic Scene Setup
 const scene = new THREE.Scene();
@@ -13,6 +14,15 @@ const renderer = new THREE.WebGLRenderer({
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+
+// Add Camera Controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; // Optional: adds inertia to camera movement
+controls.dampingFactor = 0.05;
+controls.screenSpacePanning = false; // Optional: keep panning behavior consistent
+controls.minDistance = 2; // Optional: limit zoom in
+controls.maxDistance = 50; // Optional: limit zoom out
+// controls.maxPolarAngle = Math.PI / 2; // Optional: prevent camera from going below ground
 
 // Add Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
@@ -44,9 +54,12 @@ camera.lookAt(scene.position); // Make camera look at the center
 function animate() {
     requestAnimationFrame(animate);
 
-    // Cube rotation
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
+    // Update Controls
+    controls.update(); // Only required if controls.enableDamping = true, or if controls.autoRotate = true
+
+    // Cube rotation - Removed for now to focus on camera controls
+    // cube.rotation.x += 0.01;
+    // cube.rotation.y += 0.01;
 
     renderer.render(scene, camera);
 }
