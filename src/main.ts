@@ -15,11 +15,15 @@ import { createFences } from './entities/Fence';
 // import { setupOrbitControls } from './controls/OrbitControlsSetup'; // Comment out OrbitControls
 import { VehicleControls } from './controls/VehicleControls';
 import { FollowCamera } from './controls/FollowCamera'; // Import FollowCamera
+// Import OrbitControls
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // --- Constants ---
 const INITIAL_CAR_POSITION = new CANNON.Vec3(0, 1.5, 0); // Initial Y position might need adjustment
 const INITIAL_CAR_QUATERNION = new CANNON.Quaternion(); // Default orientation (no rotation)
 INITIAL_CAR_QUATERNION.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0); // Explicitly set no rotation around Y
+const INITIAL_CAMERA_OFFSET = new THREE.Vector3(0, 5, -10); // Define offset for reuse
+const DESIRED_CAMERA_DISTANCE = INITIAL_CAMERA_OFFSET.length(); // Calculate distance automatically
 
 // --- Global Scope Variables ---
 const scene = new THREE.Scene();
@@ -28,6 +32,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 let world: CANNON.World;
 let cannonDebugger: ReturnType<typeof CannonDebugger>;
 let followCamera: FollowCamera | null = null;
+let orbitControls: OrbitControls | null = null;
 let vehicleControls: VehicleControls | null = null;
 let carData: CarData | null = null;
 const clock = new THREE.Clock();
@@ -62,6 +67,13 @@ async function initializeGame() {
         scale: 1.0
     });
 
+    // --- Setup OrbitControls --- 
+    orbitControls = new OrbitControls(camera, renderer.domElement);
+    orbitControls.enableDamping = true; // Optional: adds inertia to camera movement
+    orbitControls.dampingFactor = 0.1;
+    orbitControls.screenSpacePanning = false; // Optional: Adjust panning behavior
+    // Don't set a fixed target yet, we'll update it dynamically
+
     // Load Game Entities
     try {
         // Load terrain
@@ -79,6 +91,19 @@ async function initializeGame() {
         // Instantiate FollowCamera *after* car mesh is available
         followCamera = new FollowCamera(camera, carData.mesh);
         
+        // Set initial OrbitControls target
+        if (orbitControls && carData) {
+            const carPosition = carData.mesh.position;
+            orbitControls.target.copy(carPosition);
+            
+            // Calculate initial camera position (behind and above the car)
+            const initialCameraPos = carPosition.clone().add(INITIAL_CAMERA_OFFSET);
+            camera.position.copy(initialCameraPos);
+            camera.lookAt(carPosition); // Ensure camera looks at the car initially
+
+            orbitControls.update(); // Update controls after setting position and target
+        }
+
         // Load other entities like fences if needed
         // const fence = createFence(world, materials);
         // if (fence) scene.add(fence);
@@ -134,7 +159,7 @@ function animate() {
     const dt = Math.min(deltaTime, 1 / 30); // Cap physics step time
 
     // Only run simulation if initialized correctly
-    if (world && carData && vehicleControls && cannonDebugger && followCamera) {
+    if (world && carData && vehicleControls && cannonDebugger && orbitControls) {
         // 1. Update Controls (Calculate forces/steering)
         vehicleControls.update(dt);
 
@@ -170,8 +195,23 @@ function animate() {
             // }
         }
         
-        // 5. Update Camera
-        followCamera.update(dt);
+        // --- Update OrbitControls Target --- 
+        orbitControls.target.copy(carData.mesh.position); // Make the controls orbit around the car's current position
+        orbitControls.update(); // CRITICAL: Update OrbitControls to process user input and target change
+
+        // --- Enforce Constant Camera Distance --- 
+        const targetPosition = orbitControls.target; // Use the target we just set
+        const cameraPosition = camera.position;
+        const direction = new THREE.Vector3();
+        direction.subVectors(cameraPosition, targetPosition).normalize(); // Get direction from target to camera
+        
+        // Calculate the new desired position
+        const newCameraPosition = targetPosition.clone().addScaledVector(direction, DESIRED_CAMERA_DISTANCE);
+        
+        // Apply the new position
+        camera.position.copy(newCameraPosition);
+        // No need to call camera.lookAt(target) here, OrbitControls handles the looking direction
+        // No need to call orbitControls.update() again here, we just adjusted the final position
 
         // 6. Update Debugger
         cannonDebugger.update(); 
