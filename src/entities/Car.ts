@@ -26,36 +26,33 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
     const gltf = await loader.loadAsync('/models/car.glb');
     const carMesh = gltf.scene;
 
-    // --- Find Visual Wheel Nodes (ASSUMES NAMING CONVENTION) ---
-    // IMPORTANT: You might need to adjust these names based on how the GLB was exported from Blender.
-    // Check the object names in Blender's outliner before exporting.
+    // --- Find Visual Wheel Nodes using correct names from image --- 
     const visualWheels = {
-        frontLeft: carMesh.getObjectByName('Wheel_Front_Left'),
-        frontRight: carMesh.getObjectByName('Wheel_Front_Right'),
-        rearLeft: carMesh.getObjectByName('Wheel_Rear_Left'),
-        rearRight: carMesh.getObjectByName('Wheel_Rear_Right')
+        frontLeft: carMesh.getObjectByName('wheel_fl'),
+        frontRight: carMesh.getObjectByName('wheel_fr'),
+        rearLeft: carMesh.getObjectByName('wheel_bl'),
+        rearRight: carMesh.getObjectByName('wheel_br')
     };
-    console.log("Found visual wheels:", visualWheels);
-    // If names aren't found, the wheels won't sync visually.
+    console.log("Found visual wheels in original car.glb:", visualWheels);
+    
 
-    carMesh.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-            // child.castShadow = true;
-            // child.receiveShadow = true;
-        }
-    });
-
-    // --- Physics Setup --- 
-    const chassisWidth = 1.8;
-    const chassisHeight = 0.2; // Keep thin shape for clearance
-    const chassisLength = 4.0;
-    const chassisMass = 600; // Adjusted mass
+    // --- Physics Setup (Reverted to likely original scale values) --- 
+    // Use dimensions suitable for the original model
+    const chassisWidth = 1.8; 
+    const chassisHeight = 0.5; // Might need adjustment based on visual model
+    const chassisLength = 4.0; 
+    const chassisMass = 600; // Revert to a potentially higher mass 
     const chassisShape = new CANNON.Box(new CANNON.Vec3(chassisWidth / 2, chassisHeight / 2, chassisLength / 2));
+    
+    // Calculate initial position based on original dimensions
+    const wheelRadius = 0.35; // Revert to original estimate
+    const initialChassisY = wheelRadius; // Start with chassis bottom near wheel bottom
+
     const chassisBody = new CANNON.Body({ 
         mass: chassisMass,
-        material: materials.carMaterial, // Use a dedicated material if needed
+        material: materials.carMaterial, 
         shape: chassisShape,
-        position: new CANNON.Vec3(0, 1.5, 0), // Start reasonably high
+        position: new CANNON.Vec3(0, initialChassisY, 0), 
         angularDamping: 0.5
      });
     world.addBody(chassisBody);
@@ -63,44 +60,43 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
     // --- Raycast Vehicle Setup --- 
     const vehicle = new CANNON.RaycastVehicle({
         chassisBody: chassisBody,
-        indexUpAxis: 1, // 0=x, 1=y, 2=z
+        indexUpAxis: 1, 
         indexForwardAxis: 2,
         indexRightAxis: 0
     });
 
-    // --- Wheel Info Configuration --- 
-    const wheelRadius = 0.35;
-    const wheelMaterial = materials.wheelMaterial; // Use the defined wheel material
-    const suspensionStiffness = 35;
-    const suspensionRestLength = 0.4;
-    const suspensionDamping = 4; // Combined damping
-    const maxSuspensionTravel = 0.2;
-    const frictionSlip = 1.5;
-    const rollInfluence = 0.05;
+    // --- Wheel Info Configuration (Reverted to likely original scale) --- 
+    const wheelMaterial = materials.wheelMaterial; 
+    const suspensionStiffness = 35; // Revert stiffness
+    const suspensionRestLength = 0.3; // Revert rest length
+    const suspensionDamping = 4; // Revert damping
+    const maxSuspensionTravel = 0.2; // Revert travel
+    const frictionSlip = 1.5; 
+    const rollInfluence = 0.05; 
 
     const wheelOptions = {
-        radius: wheelRadius,
+        radius: wheelRadius, // Use original radius
         material: wheelMaterial,
-        directionLocal: new CANNON.Vec3(0, -1, 0), // Suspension direction (down)
+        directionLocal: new CANNON.Vec3(0, -1, 0), 
         suspensionStiffness: suspensionStiffness,
         suspensionRestLength: suspensionRestLength,
         frictionSlip: frictionSlip,
         dampingRelaxation: suspensionDamping, 
         dampingCompression: suspensionDamping * 0.7, 
-        maxSuspensionForce: 100000,
+        maxSuspensionForce: 100000, 
         rollInfluence: rollInfluence,
-        axleLocal: new CANNON.Vec3(-1, 0, 0), // Wheel rotation axis (corrected: should be local X for side wheels)
-        chassisConnectionPointLocal: new CANNON.Vec3(), // To be set per wheel
-        isFrontWheel: false, // To be set per wheel
+        axleLocal: new CANNON.Vec3(-1, 0, 0), 
+        chassisConnectionPointLocal: new CANNON.Vec3(),
+        isFrontWheel: false,
         maxSuspensionTravel: maxSuspensionTravel,
         customSlidingRotationalSpeed: -30,
         useCustomfrictionRotation: true
     };
 
-    // Define wheel connection points (relative to chassis center)
-    const connectionPointZ = chassisLength * 0.35; // How far front/back
-    const connectionPointX = chassisWidth * 0.5 + 0.05; // How far side to side
-    const connectionPointY = -chassisHeight * 0.5 + 0.1; // Vertical connection offset
+    // Define wheel connection points using original chassis dimensions
+    const connectionPointZ = chassisLength * 0.38; // Adjust multiplier if needed
+    const connectionPointX = chassisWidth * 0.45; // Adjust multiplier if needed
+    const connectionPointY = -chassisHeight * 0.3; // Adjust multiplier if needed
 
     // Front Left
     wheelOptions.isFrontWheel = true;
