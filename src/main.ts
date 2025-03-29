@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { setupScene } from './core/sceneSetup';
 import { createTerrain } from './entities/Terrain';
 import { createCar } from './entities/Car';
+import { createFences } from './entities/Fence';
 import { setupOrbitControls } from './controls/OrbitControlsSetup';
 
 // Initialize core components
@@ -15,6 +16,15 @@ scene.add(terrain);
 
 const car = createCar();
 scene.add(car);
+
+// Get terrain dimensions (assuming createTerrain defines these implicitly or explicitly)
+// We'll use the values we set in Terrain.ts for now
+const terrainWidth = 200;
+const terrainHeight = 200;
+
+// Create fences
+const fences = createFences(terrainWidth, terrainHeight);
+scene.add(fences);
 
 // Setup controls
 const controls = setupOrbitControls(camera, renderer.domElement);

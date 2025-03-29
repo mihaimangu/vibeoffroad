@@ -39,17 +39,17 @@ function createGrassTexture(): THREE.CanvasTexture {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(32, 32); // Repeat the texture many times across the plane
+    texture.repeat.set(64, 64); // Increase repeat for larger terrain
     texture.anisotropy = 16; // Improve texture appearance at glancing angles
     texture.needsUpdate = true;
     return texture;
 }
 
 export function createTerrain(): THREE.Mesh {
-    const width = 100;
-    const height = 100;
-    const widthSegments = 50;
-    const heightSegments = 50;
+    const width = 200; // Increased size
+    const height = 200; // Increased size
+    const widthSegments = 100; // Increased segments for larger size
+    const heightSegments = 100; // Increased segments for larger size
 
     // Add ground plane (basic terrain)
     const planeGeometry = new THREE.PlaneGeometry(width, height, widthSegments, heightSegments);
@@ -65,7 +65,7 @@ export function createTerrain(): THREE.Mesh {
         // Simple pseudo-random noise based on vertex position
         // Using a proper noise function (Simplex, Perlin) would be better
         // Apply noise to the original Z value (which corresponds to Y-up in world space after rotation)
-        const heightOffset = (Math.sin(vertex.x * 0.2) * Math.cos(vertex.y * 0.2)) * noiseStrength;
+        const heightOffset = (Math.sin(vertex.x * 0.1) * Math.cos(vertex.y * 0.1)) * noiseStrength; // Adjusted frequency for larger terrain
 
         // Update the Z coordinate (height in the geometry's local space)
         positionAttribute.setZ(i, vertex.z + heightOffset);
