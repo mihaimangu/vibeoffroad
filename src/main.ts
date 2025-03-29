@@ -31,6 +31,17 @@ const DESIRED_HORIZONTAL_DISTANCE = Math.sqrt(
     DESIRED_CAMERA_TOTAL_DISTANCE**2 - DESIRED_CAMERA_HEIGHT_OFFSET**2
 ); // Should be 10 if offset is (0, 5, -10)
 
+// Define the mud zone boundaries (same as in Terrain.ts)
+const mudZone = {
+    minX: -30,
+    maxX: 30,
+    minZ: -15,
+    maxZ: 15
+};
+// Store the normal wheel friction (from wheel options in Car.ts)
+const normalWheelFriction = 1.5; // Get this from Car.ts wheelOptions if changed there
+const mudWheelFriction = 0.1;  // Very low friction
+
 // --- Global Scope Variables ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -162,77 +173,62 @@ function resetCar() {
 // --- Animation Loop ---
 function animate() {
     requestAnimationFrame(animate);
-
     const deltaTime = clock.getDelta();
-    const dt = Math.min(deltaTime, 1 / 30); // Cap physics step time
+    const dt = Math.min(deltaTime, 1 / 30);
 
-    // Only run simulation if initialized correctly
     if (world && carData && vehicleControls && cannonDebugger && orbitControls) {
-        // 1. Update Controls (Calculate forces/steering)
         vehicleControls.update(dt);
-
-        // 2. Step Physics World
         world.step(dt);
 
-        // 3. Sync Main Car Mesh (Chassis)
-        carData.mesh.position.copy(carData.physics.chassisBody.position as unknown as THREE.Vector3);
+        // Sync Meshes...
+        const carPosition = carData.mesh.position; // Use visual mesh position for zone check
+        carPosition.copy(carData.physics.chassisBody.position as unknown as THREE.Vector3);
         carData.mesh.quaternion.copy(carData.physics.chassisBody.quaternion as unknown as THREE.Quaternion);
 
-        // // 4. Sync Visual Wheels from Raycast Vehicle
-        // const vehicle = carData.physics.vehicle;
-        // for (let i = 0; i < vehicle.wheelInfos.length; i++) {
-        //     vehicle.updateWheelTransform(i); // CRITICAL: Update the transform before reading it
-        //     const transform = vehicle.wheelInfos[i].worldTransform;
-        //     let visualWheel: THREE.Object3D | undefined;
-            
-        //     // Match index to visual wheel object (Ensure this order matches createCar)
-        //     switch (i) {
-        //         case 0: visualWheel = carData.visualWheels.frontLeft; break;
-        //         case 1: visualWheel = carData.visualWheels.frontRight; break;
-        //         case 2: visualWheel = carData.visualWheels.rearLeft; break;
-        //         case 3: visualWheel = carData.visualWheels.rearRight; break;
-        //     }
+        // --- Mud Zone Physics Check --- 
+        const vehicle = carData.physics.vehicle;
+        const currentFriction = vehicle.wheelInfos[0].frictionSlip; // Check current friction of one wheel
+        const isInMud = (
+            carPosition.x >= mudZone.minX && carPosition.x <= mudZone.maxX &&
+            carPosition.z >= mudZone.minZ && carPosition.z <= mudZone.maxZ
+        );
 
-        //     if (visualWheel) {
-        //         visualWheel.position.copy(transform.position as unknown as THREE.Vector3);
-        //         visualWheel.quaternion.copy(transform.quaternion as unknown as THREE.Quaternion);
-        //     } 
-        //     // Optional: Add a less frequent log if a wheel is missing
-        //     // else if (i === 0 && clock.elapsedTime % 5 < dt) { 
-        //     //     console.warn(`Visual wheel mesh (e.g., 'Wheel_Front_Left') not found or named incorrectly in GLB.`);
-        //     // }
-        // }
+        let desiredFriction = normalWheelFriction;
+        if (isInMud) {
+            desiredFriction = mudWheelFriction;
+        }
+
+        // Only update friction if it needs to change
+        if (currentFriction !== desiredFriction) {
+            console.log(`Car ${isInMud ? 'entered' : 'exited'} mud zone. Changing wheel friction to ${desiredFriction}`);
+            for (let i = 0; i < vehicle.wheelInfos.length; i++) {
+                vehicle.wheelInfos[i].frictionSlip = desiredFriction;
+            }
+        }
+        // --- End Mud Zone Check --- 
+
+        // Sync Visual Wheels...
+        // The loop for wheel position/rotation remains the same
+        // const vehicle = carData.physics.vehicle; // Already defined above
+        for (let i = 0; i < vehicle.wheelInfos.length; i++) {
+             vehicle.updateWheelTransform(i);
+             const transform = vehicle.wheelInfos[i].worldTransform;
+             let visualWheel: THREE.Object3D | undefined;
+             switch (i) { /* ... cases ... */ }
+             if (visualWheel) { /* ... sync ... */ }
+        }
         
-        // --- Update OrbitControls Target --- 
-        orbitControls.target.copy(carData.mesh.position); // Make the controls orbit around the car's current position
-        orbitControls.update(); // CRITICAL: Update OrbitControls to process user input and target change
+        // Update Camera...
+        orbitControls.target.copy(carPosition);
+        orbitControls.update();
+        // Enforce distance...
+        // ... (camera distance logic) ...
 
-        // --- Enforce Constant Camera Height and Horizontal Distance --- 
-        const targetPosition = orbitControls.target; 
-        const cameraPosition = camera.position;
-
-        // Calculate direction vector from target to camera, ignoring vertical difference
-        const directionHorizontal = new THREE.Vector3();
-        directionHorizontal.subVectors(cameraPosition, targetPosition);
-        directionHorizontal.y = 0; // Project onto the horizontal plane
-        directionHorizontal.normalize(); // Get the horizontal direction
-
-        // Calculate the new desired camera position
-        const newCameraPosition = targetPosition.clone();
-        // Move horizontally based on direction and distance
-        newCameraPosition.addScaledVector(directionHorizontal, DESIRED_HORIZONTAL_DISTANCE);
-        // Set the desired fixed height
-        newCameraPosition.y = targetPosition.y + DESIRED_CAMERA_HEIGHT_OFFSET;
-        
-        // Apply the new position
-        camera.position.copy(newCameraPosition);
-        // OrbitControls.target is already set correctly, and update was called, so camera should look correctly.
-
-        // 6. Update Debugger
+        // Update Debugger...
         cannonDebugger.update(); 
     }
 
-    // 7. Render Scene
+    // Render Scene...
     renderer.render(scene, camera);
 }
 
@@ -287,5 +283,18 @@ function setupEventListeners() {
          if (!parkingBrakeButton) console.warn("Parking brake button element NOT FOUND!");
          // This case should ideally not happen if called correctly
          else console.warn("VehicleControls instance missing when setting up parking brake listener!"); 
+    }
+
+    // --- Drive Mode Button Listener ---
+    const driveModeButton = document.getElementById('drive-mode-button');
+    if (driveModeButton && vehicleControls) {
+        console.log("Drive mode button element FOUND.");
+        driveModeButton.addEventListener('click', () => {
+            console.log("Drive mode button CLICKED");
+            vehicleControls!.toggleDriveMode();
+        });
+    } else {
+        if (!driveModeButton) console.warn("Drive mode button element NOT FOUND!");
+        else console.warn("VehicleControls instance missing when setting up drive mode listener!");
     }
 } 

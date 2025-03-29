@@ -4,8 +4,8 @@ import { PhysicsMaterials } from '../core/physicsSetup'; // Import the materials
 // Consider importing a noise library like 'simplex-noise' or use THREE.MathUtils for simple noise
 
 // Function to create a simple procedural grass texture
-function createGrassTexture(): THREE.CanvasTexture {
-    const canvasSize = 128;
+function createGrassTexture(terrainWidth: number, terrainHeight: number, mudZone: { minX: number, maxX: number, minZ: number, maxZ: number }): THREE.CanvasTexture {
+    const canvasSize = 256; // Increase canvas size for better detail?
     const canvas = document.createElement('canvas');
     canvas.width = canvasSize;
     canvas.height = canvasSize;
@@ -13,24 +13,36 @@ function createGrassTexture(): THREE.CanvasTexture {
 
     for (let y = 0; y < canvasSize; y++) {
         for (let x = 0; x < canvasSize; x++) {
-            // Simple noise pattern with green variations
-            const random = Math.random();
+            // Map canvas coords (0-canvasSize) to world coords (-width/2 to +width/2)
+            // Texture T coord (y) maps to World Z, Texture S coord (x) maps to World X
+            const worldX = (x / canvasSize) * terrainWidth - terrainWidth / 2;
+            const worldZ = (y / canvasSize) * terrainHeight - terrainHeight / 2; 
+            // Note: THREE.PlaneGeometry maps texture differently than expected sometimes.
+            // Let's assume Y on canvas maps to World Z for now, adjust if needed.
+
             let r = 0, g = 0, b = 0;
-            if (random < 0.8) {
-                // Mostly green
-                g = 100 + Math.random() * 100; // 100 - 200
-                r = g * (0.6 + Math.random() * 0.2); // Slightly brownish/yellowish green
-                b = 20 + Math.random() * 30;
-            } else if (random < 0.95) {
-                // Patches of brownish/yellow
-                r = 100 + Math.random() * 80;
-                g = 100 + Math.random() * 50;
-                b = 20 + Math.random() * 20;
+            // Check if the current world coordinate is inside the mud zone
+            if (worldX >= mudZone.minX && worldX <= mudZone.maxX && worldZ >= mudZone.minZ && worldZ <= mudZone.maxZ) {
+                // Draw Mud Color
+                r = 80 + Math.random() * 40; // 80 - 120 (Brownish)
+                g = 60 + Math.random() * 30; // 60 - 90
+                b = 40 + Math.random() * 20; // 40 - 60
             } else {
-                // Darker patches
-                g = 50 + Math.random() * 50;
-                r = g * (0.8 + Math.random() * 0.2);
-                b = 10 + Math.random() * 20;
+                // Draw Grass Color (existing logic)
+                const random = Math.random();
+                if (random < 0.8) {
+                    g = 100 + Math.random() * 100; 
+                    r = g * (0.6 + Math.random() * 0.2); 
+                    b = 20 + Math.random() * 30;
+                } else if (random < 0.95) {
+                    r = 100 + Math.random() * 80;
+                    g = 100 + Math.random() * 50;
+                    b = 20 + Math.random() * 20;
+                } else {
+                    g = 50 + Math.random() * 50;
+                    r = g * (0.8 + Math.random() * 0.2);
+                    b = 10 + Math.random() * 20;
+                }
             }
 
             context.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
@@ -41,8 +53,8 @@ function createGrassTexture(): THREE.CanvasTexture {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(64, 64); // Increase repeat for larger terrain
-    texture.anisotropy = 16; // Improve texture appearance at glancing angles
+    texture.repeat.set(1, 1); // Do not repeat the texture, use the full map
+    texture.anisotropy = 16; 
     texture.needsUpdate = true;
     return texture;
 }
@@ -55,6 +67,14 @@ export function createTerrain(world: CANNON.World, materials: PhysicsMaterials):
     const height = 200; // Increased size
     const widthSegments = 100; // Increased segments for larger size
     const heightSegments = 100; // Increased segments for larger size
+
+    // --- Define Mud Zone World Coordinates --- 
+    const mudZone = {
+        minX: -30,
+        maxX: 30,
+        minZ: -15,
+        maxZ: 15
+    };
 
     // Add ground plane (basic terrain)
     const planeGeometry = new THREE.PlaneGeometry(width, height, widthSegments, heightSegments);
@@ -106,13 +126,14 @@ export function createTerrain(world: CANNON.World, materials: PhysicsMaterials):
 
     planeGeometry.computeVertexNormals(); // Recalculate normals for correct lighting
 
-    const grassTexture = createGrassTexture();
+    // Generate texture WITH the mud zone defined
+    const terrainTexture = createGrassTexture(width, height, mudZone);
 
     const planeMaterial = new THREE.MeshStandardMaterial({
-        map: grassTexture,
+        map: terrainTexture, // Use the generated texture
         roughness: 0.9,
         metalness: 0.1,
-        wireframe: false,
+        // wireframe: false, // Keep wireframe off for texture visibility
         side: THREE.DoubleSide
     });
     const groundPlaneMesh = new THREE.Mesh(planeGeometry, planeMaterial);

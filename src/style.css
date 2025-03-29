@@ -32,3 +32,40 @@
 #parking-brake-button{
     pointer-events: auto;
 }
+
+#parking-brake-button:active { /* Style while clicking */
+     color: #ccc;
+}
+
+/* --- 4WD Button Styles --- */
+#drive-mode-button {
+    margin-left: 10px; /* Space from parking brake button */
+    cursor: pointer;
+    color: #999; /* Default inactive color (2WD) */
+    pointer-events: auto; /* Allow clicks */
+    transition: color 0.1s ease-in-out, font-weight 0.1s ease-in-out;
+    font-family: sans-serif;
+    font-size: 16px; /* Smaller font size for text */
+    padding: 2px 5px;
+    border: 1px solid #777;
+    border-radius: 4px;
+    user-select: none; /* Prevent text selection */
+    vertical-align: middle; /* Align with icons */
+}
+
+#drive-mode-button:hover {
+    color: #fff;
+    border-color: #aaa;
+}
+
+/* Style for when 4WD is ON */
+#drive-mode-button.active {
+    color: #66ff66; /* Green color for active 4WD */
+    border-color: #66ff66;
+    font-weight: bold;
+}
+
+#drive-mode-button:active { /* Style while clicking */
+     color: #ccc;
+     border-color: #ccc;
+}

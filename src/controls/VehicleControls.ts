@@ -9,6 +9,9 @@ interface ControlState {
     right: boolean;
 }
 
+// Enum for drive mode
+export enum DriveMode { RWD, FWD, AWD }
+
 export class VehicleControls {
     private carPhysics: CarPhysics;
     // Store reference to CarData to access lights
@@ -16,6 +19,7 @@ export class VehicleControls {
     private controlState: ControlState;
     private parkingBrakeEngaged: boolean = false; // State for parking brake
     private isBraking: boolean = false; // Track if normal brake is applied
+    private currentDriveMode: DriveMode = DriveMode.RWD; // Start in Rear-Wheel Drive
     private maxForce: number = 2000; // *** Increased driving force significantly *** 
     private maxSteerValue: number = 0.5; // Max steering angle in radians (approx 30 degrees)
     private maxBrakeForce: number = 150; // Braking force
@@ -31,6 +35,7 @@ export class VehicleControls {
         left: HTMLElement | null;
         right: HTMLElement | null;
         parkingBrake: HTMLElement | null; // Add parking brake element
+        driveMode: HTMLElement | null; // Add drive mode element
     };
 
     constructor(carData: CarData) {
@@ -48,7 +53,8 @@ export class VehicleControls {
             down: document.getElementById('control-down'),
             left: document.getElementById('control-left'),
             right: document.getElementById('control-right'),
-            parkingBrake: document.getElementById('parking-brake-button') // Find parking brake button
+            parkingBrake: document.getElementById('parking-brake-button'), // Find parking brake button
+            driveMode: document.getElementById('drive-mode-button') // Find drive mode button
         };
         
         this.setupKeyboardListeners();
@@ -60,8 +66,11 @@ export class VehicleControls {
         window.addEventListener('keyup', (event) => this.handleKey(event, false));
         // Optional: Add keyboard shortcut for parking brake (e.g., 'P')
         window.addEventListener('keypress', (event) => {
-             if (event.key.toUpperCase() === 'P') {
+             const key = event.key.toUpperCase();
+             if (key === 'P') {
                  this.toggleParkingBrake();
+             } else if (key === 'F') { // Add shortcut for drive mode (e.g., 'F')
+                 this.toggleDriveMode();
              }
         });
     }
@@ -114,6 +123,14 @@ export class VehicleControls {
         if (this.uiElements.right) this.uiElements.right.classList.toggle('active', this.controlState.right);
         // Update parking brake button style
         if (this.uiElements.parkingBrake) this.uiElements.parkingBrake.classList.toggle('active', this.parkingBrakeEngaged);
+        
+        // Update drive mode button style and text
+        if (this.uiElements.driveMode) {
+            const isAWD = this.currentDriveMode === DriveMode.AWD;
+            this.uiElements.driveMode.classList.toggle('active', isAWD);
+            this.uiElements.driveMode.textContent = isAWD ? "4WD" : "2WD";
+            this.uiElements.driveMode.title = `Toggle ${isAWD ? "2WD" : "4WD"} (F)`;
+        }
     }
 
     // Method to toggle the parking brake state
@@ -123,6 +140,17 @@ export class VehicleControls {
         this.updateUI(); // Update button appearance
         // Immediately apply/release brake in physics if toggled
         this.applyParkingBrakePhysics(); 
+    }
+
+    // Method to toggle drive mode (RWD <-> AWD for now)
+    public toggleDriveMode(): void {
+        if (this.currentDriveMode === DriveMode.RWD) {
+            this.currentDriveMode = DriveMode.AWD;
+        } else {
+            this.currentDriveMode = DriveMode.RWD;
+        }
+        console.log("Drive Mode:", DriveMode[this.currentDriveMode]);
+        this.updateUI(); // Update button appearance
     }
 
     // New method to apply/release parking brake in physics
@@ -178,9 +206,28 @@ export class VehicleControls {
             engineForce = this.maxForce * 0.5; // *** Inverted sign for reverse motion (now positive) ***
         }
 
-        // Apply engine force to rear wheels (indices 2 and 3)
-        vehicle.applyEngineForce(engineForce, 2); 
-        vehicle.applyEngineForce(engineForce, 3);
+        // --- Apply Engine Force based on Drive Mode --- 
+        vehicle.applyEngineForce(0, 0); // Ensure front wheels have 0 force unless AWD
+        vehicle.applyEngineForce(0, 1);
+        vehicle.applyEngineForce(0, 2); // Ensure rear wheels have 0 force unless RWD/AWD
+        vehicle.applyEngineForce(0, 3);
+
+        if (Math.abs(engineForce) > 0) {
+            if (this.currentDriveMode === DriveMode.AWD) {
+                // Apply force to all wheels (or adjust distribution)
+                const forcePerWheel = engineForce / 4;
+                vehicle.applyEngineForce(forcePerWheel, 0);
+                vehicle.applyEngineForce(forcePerWheel, 1);
+                vehicle.applyEngineForce(forcePerWheel, 2);
+                vehicle.applyEngineForce(forcePerWheel, 3);
+            } else if (this.currentDriveMode === DriveMode.RWD) {
+                // Apply force only to rear wheels
+                const forcePerWheel = engineForce / 2;
+                vehicle.applyEngineForce(forcePerWheel, 2);
+                vehicle.applyEngineForce(forcePerWheel, 3);
+            } 
+            // Add else if for FWD if needed
+        }
 
         // Apply braking force (can be applied to all wheels or selectively)
         // Example: Apply brake if 'S' is pressed and moving forward, or if no acceleration input
