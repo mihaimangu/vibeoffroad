@@ -3,109 +3,137 @@ import * as CANNON from 'cannon-es';
 import { PhysicsMaterials } from '../core/physicsSetup';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export interface CarPhysics { // To return physics components
+// Updated Physics interface
+export interface CarPhysics {
     chassisBody: CANNON.Body;
-    wheelBodies: CANNON.Body[];
-    wheelConstraints: CANNON.HingeConstraint[]; // Add constraints here
+    vehicle: CANNON.RaycastVehicle;
 }
 
-export async function createCar(world: CANNON.World, materials: PhysicsMaterials): Promise<{
+// Updated return type to potentially include named visual wheel nodes
+export interface CarData {
     mesh: THREE.Group;
     physics: CarPhysics;
-}> {
-    // Instantiate the loader
-    const loader = new GLTFLoader();
+    visualWheels: {
+        frontLeft: THREE.Object3D | undefined;
+        frontRight: THREE.Object3D | undefined;
+        rearLeft: THREE.Object3D | undefined;
+        rearRight: THREE.Object3D | undefined;
+    };
+}
 
-    // --- Load the GLB model --- 
+export async function createCar(world: CANNON.World, materials: PhysicsMaterials): Promise<CarData> {
+    const loader = new GLTFLoader();
     const gltf = await loader.loadAsync('/models/car.glb');
     const carMesh = gltf.scene;
-    // Optional: Scale the loaded model if necessary
-    // carMesh.scale.set(0.5, 0.5, 0.5);
-    // Optional: Ensure meshes cast/receive shadows
+
+    // --- Find Visual Wheel Nodes (ASSUMES NAMING CONVENTION) ---
+    // IMPORTANT: You might need to adjust these names based on how the GLB was exported from Blender.
+    // Check the object names in Blender's outliner before exporting.
+    const visualWheels = {
+        frontLeft: carMesh.getObjectByName('Wheel_Front_Left'),
+        frontRight: carMesh.getObjectByName('Wheel_Front_Right'),
+        rearLeft: carMesh.getObjectByName('Wheel_Rear_Left'),
+        rearRight: carMesh.getObjectByName('Wheel_Rear_Right')
+    };
+    console.log("Found visual wheels:", visualWheels);
+    // If names aren't found, the wheels won't sync visually.
+
     carMesh.traverse((child) => {
         if (child instanceof THREE.Mesh) {
             // child.castShadow = true;
             // child.receiveShadow = true;
         }
     });
-    // We will position this mesh group based on the physics body later
 
-    // --- Dimensions (Estimates for Physics - adjust based on loaded model visuals) ---
+    // --- Physics Setup --- 
     const chassisWidth = 1.8;
-    const chassisHeight = 0.2; // Keep thin for clearance
+    const chassisHeight = 0.2; // Keep thin shape for clearance
     const chassisLength = 4.0;
-    const chassisMass = 800; // --- Significantly Increased Mass ---
-
-    const wheelRadius = 0.35;
-    const wheelMass = 25; // --- Increased Wheel Mass ---
-
-    // --- Physics Shapes (Keep using simple primitives for now) --- 
-    // Use updated chassisHeight
+    const chassisMass = 600; // Adjusted mass
     const chassisShape = new CANNON.Box(new CANNON.Vec3(chassisWidth / 2, chassisHeight / 2, chassisLength / 2));
-    // Use updated wheelRadius
-    const wheelShape = new CANNON.Sphere(wheelRadius); 
-
-    // --- Chassis Physics Body --- 
-    const initialChassisY = wheelRadius + 0.8; // Keep starting high for now
-    const chassisBody = new CANNON.Body({
+    const chassisBody = new CANNON.Body({ 
         mass: chassisMass,
-        material: materials.carMaterial,
-        position: new CANNON.Vec3(0, initialChassisY, 0), 
+        material: materials.carMaterial, // Use a dedicated material if needed
         shape: chassisShape,
-        linearDamping: 0.3, // --- Added Linear Damping ---
-        angularDamping: 0.5 
-    });
+        position: new CANNON.Vec3(0, 1.5, 0), // Start reasonably high
+        angularDamping: 0.5
+     });
     world.addBody(chassisBody);
 
-    // --- Wheels Physics Bodies & Constraints --- 
-    const wheelBodies: CANNON.Body[] = [];
-    const wheelConstraints: CANNON.HingeConstraint[] = []; // Initialize constraints array
-    // Pivot points relative to the chassis center (Use updated dimensions)
-    const wheelPositions = [
-        new CANNON.Vec3(-chassisWidth / 2, 0, chassisLength / 2 * 0.7), // Y=0 relative to chassis center
-        new CANNON.Vec3( chassisWidth / 2, 0, chassisLength / 2 * 0.7), 
-        new CANNON.Vec3(-chassisWidth / 2, 0, -chassisLength / 2 * 0.7), 
-        new CANNON.Vec3( chassisWidth / 2, 0, -chassisLength / 2 * 0.7), 
-    ];
-    const wheelAxis = new CANNON.Vec3(1, 0, 0); // Hinge axis
-
-    wheelPositions.forEach((pos, index) => {
-        // Calculate world position for the wheel body relative to the CHASSIS initial position
-        const wheelWorldPos = chassisBody.position.clone().vadd(pos); 
-        // Set the wheel body's initial Y position explicitly based on radius
-        // This ensures wheels start near the ground plane, even if chassis starts higher
-        wheelWorldPos.y = wheelRadius; 
-
-        const wheelBody = new CANNON.Body({
-            mass: wheelMass,
-            material: materials.wheelMaterial,
-            shape: wheelShape, 
-            position: wheelWorldPos,
-            linearDamping: 0.3, // --- Added Linear Damping ---
-            angularDamping: 0.5 
-        });
-        world.addBody(wheelBody);
-        wheelBodies.push(wheelBody);
-
-        // Create Hinge Constraint
-        const constraint = new CANNON.HingeConstraint(chassisBody, wheelBody, {
-            pivotA: pos, // Pivot relative to chassis center
-            pivotB: new CANNON.Vec3(0, 0, 0), // Pivot relative to wheel center
-            axisA: wheelAxis,
-            axisB: wheelAxis
-        });
-        world.addConstraint(constraint);
-        wheelConstraints.push(constraint); // Store the constraint
+    // --- Raycast Vehicle Setup --- 
+    const vehicle = new CANNON.RaycastVehicle({
+        chassisBody: chassisBody,
+        indexUpAxis: 1, // 0=x, 1=y, 2=z
+        indexForwardAxis: 2,
+        indexRightAxis: 0
     });
 
-    // No need to position carMesh here, it will be synced in main.ts
+    // --- Wheel Info Configuration --- 
+    const wheelRadius = 0.35;
+    const wheelMaterial = materials.wheelMaterial; // Use the defined wheel material
+    const suspensionStiffness = 35;
+    const suspensionRestLength = 0.4;
+    const suspensionDamping = 4; // Combined damping
+    const maxSuspensionTravel = 0.2;
+    const frictionSlip = 1.5;
+    const rollInfluence = 0.05;
 
-    const carPhysics: CarPhysics = {
-        chassisBody,
-        wheelBodies,
-        wheelConstraints // Include constraints in the returned object
+    const wheelOptions = {
+        radius: wheelRadius,
+        material: wheelMaterial,
+        directionLocal: new CANNON.Vec3(0, -1, 0), // Suspension direction (down)
+        suspensionStiffness: suspensionStiffness,
+        suspensionRestLength: suspensionRestLength,
+        frictionSlip: frictionSlip,
+        dampingRelaxation: suspensionDamping, 
+        dampingCompression: suspensionDamping * 0.7, 
+        maxSuspensionForce: 100000,
+        rollInfluence: rollInfluence,
+        axleLocal: new CANNON.Vec3(-1, 0, 0), // Wheel rotation axis (corrected: should be local X for side wheels)
+        chassisConnectionPointLocal: new CANNON.Vec3(), // To be set per wheel
+        isFrontWheel: false, // To be set per wheel
+        maxSuspensionTravel: maxSuspensionTravel,
+        customSlidingRotationalSpeed: -30,
+        useCustomfrictionRotation: true
     };
 
-    // Return the loaded mesh and the physics components
-    return { mesh: carMesh, physics: carPhysics }; 
+    // Define wheel connection points (relative to chassis center)
+    const connectionPointZ = chassisLength * 0.35; // How far front/back
+    const connectionPointX = chassisWidth * 0.5 + 0.05; // How far side to side
+    const connectionPointY = -chassisHeight * 0.5 + 0.1; // Vertical connection offset
+
+    // Front Left
+    wheelOptions.isFrontWheel = true;
+    wheelOptions.chassisConnectionPointLocal.set(connectionPointX, connectionPointY, connectionPointZ);
+    vehicle.addWheel(wheelOptions);
+
+    // Front Right
+    wheelOptions.isFrontWheel = true;
+    wheelOptions.chassisConnectionPointLocal.set(-connectionPointX, connectionPointY, connectionPointZ);
+    vehicle.addWheel(wheelOptions);
+
+    // Rear Left
+    wheelOptions.isFrontWheel = false;
+    wheelOptions.chassisConnectionPointLocal.set(connectionPointX, connectionPointY, -connectionPointZ);
+    vehicle.addWheel(wheelOptions);
+
+    // Rear Right
+    wheelOptions.isFrontWheel = false;
+    wheelOptions.chassisConnectionPointLocal.set(-connectionPointX, connectionPointY, -connectionPointZ);
+    vehicle.addWheel(wheelOptions);
+
+    vehicle.addToWorld(world);
+
+    // Store physics components
+    const carPhysics: CarPhysics = {
+        chassisBody,
+        vehicle
+    };
+
+    // Return all data
+    return {
+        mesh: carMesh,
+        physics: carPhysics,
+        visualWheels
+    };
 } 

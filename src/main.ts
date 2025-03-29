@@ -7,100 +7,156 @@ import CannonDebugger from 'cannon-es-debugger'; // Import the debugger
 import { setupScene } from './core/sceneSetup';
 import { setupPhysicsWorld } from './core/physicsSetup';
 import { createTerrain } from './entities/Terrain';
-import { createCar } from './entities/Car';
+import { createCar, CarData } from './entities/Car';
 import { createFences } from './entities/Fence';
 // import { setupOrbitControls } from './controls/OrbitControlsSetup'; // Comment out OrbitControls
 import { VehicleControls } from './controls/VehicleControls';
 import { FollowCamera } from './controls/FollowCamera'; // Import FollowCamera
 
-async function initializeGame() { // Wrap initialization in an async function
-    // Initialize core components
-    const { scene, camera, renderer } = setupScene();
+// --- Global Scope Variables ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+let world: CANNON.World;
+let cannonDebugger: ReturnType<typeof CannonDebugger>;
+let followCamera: FollowCamera | null = null;
+let vehicleControls: VehicleControls | null = null;
+let carData: CarData | null = null;
+const clock = new THREE.Clock();
 
-    // Initialize physics world
-    const { world, materials } = setupPhysicsWorld();
+// --- Initialization Function ---
+async function initializeGame() {
+    // Basic Scene Setup
+    scene.background = new THREE.Color(0x87ceeb); 
+    camera.position.set(10, 10, 10); 
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
 
-    // Initialize physics debugger
-    const cannonDebugger = CannonDebugger(scene, world, {
-        color: 0x0000ff, // Changed Wireframe color to blue
-        scale: 1.0, // Optional: scale the debug meshes
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(20, 30, 15);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    scene.add(directionalLight);
+
+    // Physics Setup
+    const physicsSetup = setupPhysicsWorld();
+    world = physicsSetup.world; // Assign to global scope variable
+    const materials = physicsSetup.materials;
+
+    // Physics Debugger
+    cannonDebugger = CannonDebugger(scene, world, { 
+        color: 0x0000ff, // Blue wireframes
+        scale: 1.0
     });
 
-    // Create entities and add their meshes/bodies
-    const terrainData = createTerrain(world, materials);
-    scene.add(terrainData.mesh);
-    // Terrain body is static, no mesh syncing needed
+    // Load Game Entities
+    try {
+        // Load terrain
+        const terrainData = await createTerrain(world, materials);
+        if (terrainData) scene.add(terrainData.mesh);
 
-    // --- Load Car Asynchronously --- 
-    const carData = await createCar(world, materials); // Use await here
-    scene.add(carData.mesh); // Add the loaded GLTF scene
-    const carPhysics = carData.physics;
-    const carMesh = carData.mesh; // Get a reference to the car mesh for the camera
+        // Load car
+        carData = await createCar(world, materials); // Returns CarData
+        if (!carData) throw new Error("Car creation failed");
+        scene.add(carData.mesh);
 
-    // Get terrain dimensions 
-    const terrainWidth = 200;
-    const terrainHeight = 200;
+        // Instantiate VehicleControls *after* car is created
+        vehicleControls = new VehicleControls(carData.physics);
 
-    // Create fences (visuals only needed in scene)
-    const fencesGroup = createFences(terrainWidth, terrainHeight, world, materials);
-    scene.add(fencesGroup);
-    // Fence bodies are static, no mesh syncing needed
-
-    // Setup Orbit controls (Commented Out)
-    // const orbitControls = setupOrbitControls(camera, renderer.domElement);
-    
-    // Setup Vehicle Controls
-    const vehicleControls = new VehicleControls();
-    vehicleControls.connect(carPhysics); // Connect to the car's physics data
-
-    // Setup Follow Camera
-    const followCamera = new FollowCamera(camera, carMesh);
-
-    // --- Animation Loop --- 
-    const clock = new THREE.Clock();
-    let oldElapsedTime = 0;
-
-    function animate() {
-        requestAnimationFrame(animate);
-
-        const elapsedTime = clock.getElapsedTime();
-        const deltaTime = elapsedTime - oldElapsedTime;
-        oldElapsedTime = elapsedTime;
-
-        // --- Update Vehicle Controls (before physics step) ---
-        vehicleControls.update(deltaTime);
-
-        // --- Physics Step ---
-        if (deltaTime > 0) {
-            world.step(1 / 60, deltaTime, 3); 
-        }
-
-        // --- Sync Meshes --- 
-        // Sync the entire loaded car model to the chassis physics body
-        carData.mesh.position.copy(carPhysics.chassisBody.position as any);
-        carData.mesh.quaternion.copy(carPhysics.chassisBody.quaternion as any);
-        // Individual wheel visual sync is not needed as they are part of the loaded model
+        // Instantiate FollowCamera *after* car mesh is available
+        followCamera = new FollowCamera(camera, carData.mesh);
         
-        // --- Update Follow Camera --- 
-        followCamera.update(deltaTime);
+        // Load other entities like fences if needed
+        // const fence = createFence(world, materials);
+        // if (fence) scene.add(fence);
 
-        // --- Update Orbit Controls (Commented Out) --- 
-        // orbitControls.update(); 
+        console.log("Game initialized successfully!");
 
-        // --- Update Debugger --- 
-        cannonDebugger.update();
-
-        // --- Render --- 
-        renderer.render(scene, camera);
+    } catch (error) {
+        console.error("Failed to initialize game entities:", error);
+        // Display error message to user?
     }
-
-    // Start the animation loop
-    animate();
-
-    console.log("VibeOffroad game initialized with GLTF model and physics.");
 }
 
-// Run the async initialization function
-initializeGame().catch(error => {
-    console.error("Failed to initialize game:", error);
+// --- Animation Loop ---
+function animate() {
+    requestAnimationFrame(animate);
+
+    const deltaTime = clock.getDelta();
+    const dt = Math.min(deltaTime, 1 / 30); // Cap physics step time
+
+    // Only run simulation if initialized correctly
+    if (world && carData && vehicleControls && cannonDebugger) {
+        // 1. Update Controls (Calculate forces/steering)
+        vehicleControls.update(dt);
+
+        // 2. Step Physics World
+        world.step(dt);
+
+        // 3. Sync Main Car Mesh (Chassis)
+        carData.mesh.position.copy(carData.physics.chassisBody.position as unknown as THREE.Vector3);
+        carData.mesh.quaternion.copy(carData.physics.chassisBody.quaternion as unknown as THREE.Quaternion);
+
+        // 4. Sync Visual Wheels from Raycast Vehicle
+        const vehicle = carData.physics.vehicle;
+        for (let i = 0; i < vehicle.wheelInfos.length; i++) {
+            vehicle.updateWheelTransform(i); // CRITICAL: Update the transform before reading it
+            const transform = vehicle.wheelInfos[i].worldTransform;
+            let visualWheel: THREE.Object3D | undefined;
+            
+            // Match index to visual wheel object (Ensure this order matches createCar)
+            switch (i) {
+                case 0: visualWheel = carData.visualWheels.frontLeft; break;
+                case 1: visualWheel = carData.visualWheels.frontRight; break;
+                case 2: visualWheel = carData.visualWheels.rearLeft; break;
+                case 3: visualWheel = carData.visualWheels.rearRight; break;
+            }
+
+            if (visualWheel) {
+                visualWheel.position.copy(transform.position as unknown as THREE.Vector3);
+                visualWheel.quaternion.copy(transform.quaternion as unknown as THREE.Quaternion);
+            } 
+            // Optional: Add a less frequent log if a wheel is missing
+            // else if (i === 0 && clock.elapsedTime % 5 < dt) { 
+            //     console.warn(`Visual wheel mesh (e.g., 'Wheel_Front_Left') not found or named incorrectly in GLB.`);
+            // }
+        }
+        
+        // 5. Update Camera
+        if (followCamera) {
+            followCamera.update(dt);
+        }
+
+        // 6. Update Debugger
+        cannonDebugger.update(); 
+    }
+
+    // 7. Render Scene
+    renderer.render(scene, camera);
+}
+
+// --- Window Resize Handler ---
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onWindowResize);
+
+// --- Start the Application ---
+initializeGame().then(() => {
+    if (carData && vehicleControls && followCamera && world) {
+        console.log("Starting animation loop.");
+        animate();
+    } else {
+        console.error("Initialization check failed before starting animation loop.");
+        // Display error message on the page if desired
+    }
+}).catch(err => {
+    console.error("Initialization promise failed:", err);
 }); 
