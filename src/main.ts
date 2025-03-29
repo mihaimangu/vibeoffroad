@@ -16,6 +16,11 @@ import { createFences } from './entities/Fence';
 import { VehicleControls } from './controls/VehicleControls';
 import { FollowCamera } from './controls/FollowCamera'; // Import FollowCamera
 
+// --- Constants ---
+const INITIAL_CAR_POSITION = new CANNON.Vec3(0, 1.5, 0); // Initial Y position might need adjustment
+const INITIAL_CAR_QUATERNION = new CANNON.Quaternion(); // Default orientation (no rotation)
+INITIAL_CAR_QUATERNION.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0); // Explicitly set no rotation around Y
+
 // --- Global Scope Variables ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -86,6 +91,41 @@ async function initializeGame() {
     }
 }
 
+// --- Reset Function ---
+function resetCar() {
+    if (!carData) return;
+
+    const chassisBody = carData.physics.chassisBody;
+    const vehicle = carData.physics.vehicle;
+
+    // Reset position and orientation
+    chassisBody.position.copy(INITIAL_CAR_POSITION);
+    chassisBody.quaternion.copy(INITIAL_CAR_QUATERNION);
+
+    // Reset velocities
+    chassisBody.velocity.set(0, 0, 0);
+    chassisBody.angularVelocity.set(0, 0, 0);
+
+    // Reset vehicle-specific states (like steering)
+    vehicle.setSteeringValue(0, 0);
+    vehicle.setSteeringValue(0, 1);
+    vehicle.applyEngineForce(0, 2); 
+    vehicle.applyEngineForce(0, 3);
+    vehicle.setBrake(0, 0);
+    vehicle.setBrake(0, 1);
+    vehicle.setBrake(0, 2);
+    vehicle.setBrake(0, 3);
+
+    // If you have other states (like control state in VehicleControls), 
+    // you might want to reset them too, e.g., by calling a reset method on vehicleControls
+    if (vehicleControls) {
+        // TODO: Consider adding a reset method to VehicleControls if needed
+        // vehicleControls.reset(); 
+    }
+
+    console.log("Car reset!");
+}
+
 // --- Animation Loop ---
 function animate() {
     requestAnimationFrame(animate);
@@ -153,6 +193,7 @@ window.addEventListener('resize', onWindowResize);
 initializeGame().then(() => {
     if (carData && vehicleControls && followCamera && world) {
         console.log("Starting animation loop.");
+        resetCar();
         animate();
     } else {
         console.error("Initialization check failed before starting animation loop.");
@@ -160,4 +201,21 @@ initializeGame().then(() => {
     }
 }).catch(err => {
     console.error("Initialization promise failed:", err);
+}); 
+
+// --- Add Event Listener for Reset Button ---
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOMContentLoaded event fired."); // Log 1: Did the event fire?
+    const resetButton = document.getElementById('reset-button');
+    
+    if (resetButton) {
+        console.log("Reset button element FOUND."); // Log 2: Did we find the element?
+        resetButton.addEventListener('click', () => {
+            console.log("Reset button CLICKED - Listener is working!"); // Log 3: Did the click register?
+            resetCar(); // Call the reset function
+        });
+    } else {
+        // This log is important!
+        console.warn("Reset button element NOT FOUND! Check index.html for typo in id='reset-button' or script timing."); 
+    }
 }); 
