@@ -9,8 +9,9 @@ import { setupPhysicsWorld } from './core/physicsSetup';
 import { createTerrain } from './entities/Terrain';
 import { createCar } from './entities/Car';
 import { createFences } from './entities/Fence';
-import { setupOrbitControls } from './controls/OrbitControlsSetup';
-import { VehicleControls } from './controls/VehicleControls'; // Import VehicleControls
+// import { setupOrbitControls } from './controls/OrbitControlsSetup'; // Comment out OrbitControls
+import { VehicleControls } from './controls/VehicleControls';
+import { FollowCamera } from './controls/FollowCamera'; // Import FollowCamera
 
 async function initializeGame() { // Wrap initialization in an async function
     // Initialize core components
@@ -33,10 +34,8 @@ async function initializeGame() { // Wrap initialization in an async function
     // --- Load Car Asynchronously --- 
     const carData = await createCar(world, materials); // Use await here
     scene.add(carData.mesh); // Add the loaded GLTF scene
-    const carChassisBody = carData.physics.chassisBody;
-    // Store the full physics data for controls
     const carPhysics = carData.physics;
-    // We no longer need direct references to visual wheel meshes/groups
+    const carMesh = carData.mesh; // Get a reference to the car mesh for the camera
 
     // Get terrain dimensions 
     const terrainWidth = 200;
@@ -47,12 +46,15 @@ async function initializeGame() { // Wrap initialization in an async function
     scene.add(fencesGroup);
     // Fence bodies are static, no mesh syncing needed
 
-    // Setup controls
-    const orbitControls = setupOrbitControls(camera, renderer.domElement);
+    // Setup Orbit controls (Commented Out)
+    // const orbitControls = setupOrbitControls(camera, renderer.domElement);
     
     // Setup Vehicle Controls
     const vehicleControls = new VehicleControls();
     vehicleControls.connect(carPhysics); // Connect to the car's physics data
+
+    // Setup Follow Camera
+    const followCamera = new FollowCamera(camera, carMesh);
 
     // --- Animation Loop --- 
     const clock = new THREE.Clock();
@@ -75,12 +77,15 @@ async function initializeGame() { // Wrap initialization in an async function
 
         // --- Sync Meshes --- 
         // Sync the entire loaded car model to the chassis physics body
-        carData.mesh.position.copy(carChassisBody.position as any);
-        carData.mesh.quaternion.copy(carChassisBody.quaternion as any);
+        carData.mesh.position.copy(carPhysics.chassisBody.position as any);
+        carData.mesh.quaternion.copy(carPhysics.chassisBody.quaternion as any);
         // Individual wheel visual sync is not needed as they are part of the loaded model
         
-        // --- Update Orbit Controls --- 
-        orbitControls.update(); 
+        // --- Update Follow Camera --- 
+        followCamera.update(deltaTime);
+
+        // --- Update Orbit Controls (Commented Out) --- 
+        // orbitControls.update(); 
 
         // --- Update Debugger --- 
         cannonDebugger.update();
