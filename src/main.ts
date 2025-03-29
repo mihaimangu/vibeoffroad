@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger'; // Import the debugger
 
+// Import global styles
+import '../src/style.css';
+
 import { setupScene } from './core/sceneSetup';
 import { setupPhysicsWorld } from './core/physicsSetup';
 import { createTerrain } from './entities/Terrain';
@@ -91,7 +94,7 @@ function animate() {
     const dt = Math.min(deltaTime, 1 / 30); // Cap physics step time
 
     // Only run simulation if initialized correctly
-    if (world && carData && vehicleControls && cannonDebugger) {
+    if (world && carData && vehicleControls && cannonDebugger && followCamera) {
         // 1. Update Controls (Calculate forces/steering)
         vehicleControls.update(dt);
 
@@ -128,9 +131,7 @@ function animate() {
         }
         
         // 5. Update Camera
-        if (followCamera) {
-            followCamera.update(dt);
-        }
+        followCamera.update(dt);
 
         // 6. Update Debugger
         cannonDebugger.update(); 

@@ -14,9 +14,17 @@ export class VehicleControls {
     private controlState: ControlState;
     private maxForce: number = 2000; // *** Increased driving force significantly *** 
     private maxSteerValue: number = 0.5; // Max steering angle in radians (approx 30 degrees)
-    private maxBrakeForce: number = 50; // Braking force
+    private maxBrakeForce: number = 150; // Braking force
     private currentSteering: number = 0; // For smooth steering
     private steeringLerpFactor: number = 0.1; // How quickly the steering turns
+
+    // References to the HTML elements
+    private uiElements: {
+        up: HTMLElement | null;
+        down: HTMLElement | null;
+        left: HTMLElement | null;
+        right: HTMLElement | null;
+    };
 
     constructor(carPhysics: CarPhysics) {
         this.carPhysics = carPhysics; // Store the physics object containing the vehicle
@@ -26,8 +34,16 @@ export class VehicleControls {
             left: false,
             right: false,
         };
-
+        // Find UI elements on creation
+        this.uiElements = {
+            up: document.getElementById('control-up'),
+            down: document.getElementById('control-down'),
+            left: document.getElementById('control-left'),
+            right: document.getElementById('control-right')
+        };
+        
         this.setupKeyboardListeners();
+        this.updateUI(); // Initial UI state
     }
 
     private setupKeyboardListeners() {
@@ -36,24 +52,51 @@ export class VehicleControls {
     }
 
     private handleKey(event: KeyboardEvent, isKeyDown: boolean) {
+        let stateChanged = false;
+
         switch (event.key.toUpperCase()) {
             case 'W':
             case 'ARROWUP':
-                this.controlState.forward = isKeyDown;
+                if (this.controlState.forward !== isKeyDown) {
+                    this.controlState.forward = isKeyDown;
+                    stateChanged = true;
+                }
                 break;
             case 'S':
             case 'ARROWDOWN':
-                this.controlState.backward = isKeyDown;
+                if (this.controlState.backward !== isKeyDown) {
+                    this.controlState.backward = isKeyDown;
+                    stateChanged = true;
+                }
                 break;
             case 'A':
             case 'ARROWLEFT':
-                this.controlState.left = isKeyDown;
+                if (this.controlState.left !== isKeyDown) {
+                    this.controlState.left = isKeyDown;
+                    stateChanged = true;
+                }
                 break;
             case 'D':
             case 'ARROWRIGHT':
-                this.controlState.right = isKeyDown;
+                if (this.controlState.right !== isKeyDown) {
+                    this.controlState.right = isKeyDown;
+                    stateChanged = true;
+                }
                 break;
         }
+
+        // If the state changed, update the UI directly
+        if (stateChanged) {
+            this.updateUI();
+        }
+    }
+
+    // New method to update UI element classes
+    private updateUI(): void {
+        if (this.uiElements.up) this.uiElements.up.classList.toggle('active', this.controlState.forward);
+        if (this.uiElements.down) this.uiElements.down.classList.toggle('active', this.controlState.backward);
+        if (this.uiElements.left) this.uiElements.left.classList.toggle('active', this.controlState.left);
+        if (this.uiElements.right) this.uiElements.right.classList.toggle('active', this.controlState.right);
     }
 
     public update(deltaTime: number): void {
