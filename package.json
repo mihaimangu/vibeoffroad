@@ -1,0 +1,29 @@
+{
+  "name": "vibeoffroad-game",
+  "version": "0.1.0",
+  "description": "A realistic off-road simulation game using Three.js and TypeScript",
+  "main": "dist/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "three.js",
+    "typescript",
+    "offroad",
+    "simulation",
+    "game"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/three": "^0.175.0",
+    "three": "^0.175.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vite": "^6.2.3"
+  }
+}
