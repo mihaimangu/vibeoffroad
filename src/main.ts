@@ -33,11 +33,51 @@ directionalLight.position.set(5, 10, 7.5);
 scene.add(directionalLight);
 
 // Add a simple cube (placeholder for vehicle later)
-const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
-const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red cube, standard material
-const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-cube.position.y = 0.5; // Place cube slightly above the ground plane
-scene.add(cube);
+// const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+// const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red cube, standard material
+// const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+// cube.position.y = 0.5; // Place cube slightly above the ground plane
+// scene.add(cube);
+
+// Create a simple placeholder car
+const car = new THREE.Group();
+scene.add(car);
+
+// Car Body
+const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x0055ff }); // Blue body
+const bodyGeometry = new THREE.BoxGeometry(2, 0.6, 4); // width, height, length
+const carBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+carBody.position.y = 0.6; // Lift the body slightly
+car.add(carBody);
+
+// Optional: Add a simple cabin
+const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc }); // Light grey cabin
+const cabinGeometry = new THREE.BoxGeometry(1.8, 0.8, 2.5); // Slightly smaller than body
+const carCabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+carCabin.position.set(0, 1.0, -0.2); // Position on top of the body, slightly back
+car.add(carCabin);
+
+
+// Car Wheels
+const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 }); // Dark grey wheels
+const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 18); // radiusTop, radiusBottom, height, radialSegments
+wheelGeometry.rotateZ(Math.PI / 2); // Rotate wheels to align correctly
+
+const wheelPositions = [
+    new THREE.Vector3(-1.1, 0.4, 1.3),  // Front Left
+    new THREE.Vector3(1.1, 0.4, 1.3),   // Front Right
+    new THREE.Vector3(-1.1, 0.4, -1.3), // Rear Left
+    new THREE.Vector3(1.1, 0.4, -1.3)   // Rear Right
+];
+
+wheelPositions.forEach(pos => {
+    const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+    wheel.position.copy(pos);
+    car.add(wheel);
+});
+
+// Position the entire car group
+car.position.y = 0; // Car group's base is on the ground plane (wheels touch)
 
 // Add ground plane (basic terrain)
 const planeGeometry = new THREE.PlaneGeometry(100, 100); // Large plane
