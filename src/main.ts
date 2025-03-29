@@ -22,8 +22,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 const INITIAL_CAR_POSITION = new CANNON.Vec3(0, 1.5, 0); // Initial Y position might need adjustment
 const INITIAL_CAR_QUATERNION = new CANNON.Quaternion(); // Default orientation (no rotation)
 INITIAL_CAR_QUATERNION.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0); // Explicitly set no rotation around Y
-const INITIAL_CAMERA_OFFSET = new THREE.Vector3(0, 5, -10); // Define offset for reuse
-const DESIRED_CAMERA_DISTANCE = INITIAL_CAMERA_OFFSET.length(); // Calculate distance automatically
+
+const INITIAL_CAMERA_OFFSET = new THREE.Vector3(0, 5, -10); // Offset used for starting view
+const DESIRED_CAMERA_HEIGHT_OFFSET = INITIAL_CAMERA_OFFSET.y; // Extract desired height (e.g., 5)
+const DESIRED_CAMERA_TOTAL_DISTANCE = INITIAL_CAMERA_OFFSET.length(); // Optional: ~11.18
+// Calculate the desired horizontal distance based on total distance and height offset
+const DESIRED_HORIZONTAL_DISTANCE = Math.sqrt(
+    DESIRED_CAMERA_TOTAL_DISTANCE**2 - DESIRED_CAMERA_HEIGHT_OFFSET**2
+); // Should be 10 if offset is (0, 5, -10)
 
 // --- Global Scope Variables ---
 const scene = new THREE.Scene();
@@ -199,19 +205,26 @@ function animate() {
         orbitControls.target.copy(carData.mesh.position); // Make the controls orbit around the car's current position
         orbitControls.update(); // CRITICAL: Update OrbitControls to process user input and target change
 
-        // --- Enforce Constant Camera Distance --- 
-        const targetPosition = orbitControls.target; // Use the target we just set
+        // --- Enforce Constant Camera Height and Horizontal Distance --- 
+        const targetPosition = orbitControls.target; 
         const cameraPosition = camera.position;
-        const direction = new THREE.Vector3();
-        direction.subVectors(cameraPosition, targetPosition).normalize(); // Get direction from target to camera
-        
-        // Calculate the new desired position
-        const newCameraPosition = targetPosition.clone().addScaledVector(direction, DESIRED_CAMERA_DISTANCE);
+
+        // Calculate direction vector from target to camera, ignoring vertical difference
+        const directionHorizontal = new THREE.Vector3();
+        directionHorizontal.subVectors(cameraPosition, targetPosition);
+        directionHorizontal.y = 0; // Project onto the horizontal plane
+        directionHorizontal.normalize(); // Get the horizontal direction
+
+        // Calculate the new desired camera position
+        const newCameraPosition = targetPosition.clone();
+        // Move horizontally based on direction and distance
+        newCameraPosition.addScaledVector(directionHorizontal, DESIRED_HORIZONTAL_DISTANCE);
+        // Set the desired fixed height
+        newCameraPosition.y = targetPosition.y + DESIRED_CAMERA_HEIGHT_OFFSET;
         
         // Apply the new position
         camera.position.copy(newCameraPosition);
-        // No need to call camera.lookAt(target) here, OrbitControls handles the looking direction
-        // No need to call orbitControls.update() again here, we just adjusted the final position
+        // OrbitControls.target is already set correctly, and update was called, so camera should look correctly.
 
         // 6. Update Debugger
         cannonDebugger.update(); 
