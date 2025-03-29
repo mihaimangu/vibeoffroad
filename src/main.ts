@@ -176,30 +176,30 @@ function animate() {
         carData.mesh.position.copy(carData.physics.chassisBody.position as unknown as THREE.Vector3);
         carData.mesh.quaternion.copy(carData.physics.chassisBody.quaternion as unknown as THREE.Quaternion);
 
-        // 4. Sync Visual Wheels from Raycast Vehicle
-        const vehicle = carData.physics.vehicle;
-        for (let i = 0; i < vehicle.wheelInfos.length; i++) {
-            vehicle.updateWheelTransform(i); // CRITICAL: Update the transform before reading it
-            const transform = vehicle.wheelInfos[i].worldTransform;
-            let visualWheel: THREE.Object3D | undefined;
+        // // 4. Sync Visual Wheels from Raycast Vehicle
+        // const vehicle = carData.physics.vehicle;
+        // for (let i = 0; i < vehicle.wheelInfos.length; i++) {
+        //     vehicle.updateWheelTransform(i); // CRITICAL: Update the transform before reading it
+        //     const transform = vehicle.wheelInfos[i].worldTransform;
+        //     let visualWheel: THREE.Object3D | undefined;
             
-            // Match index to visual wheel object (Ensure this order matches createCar)
-            switch (i) {
-                case 0: visualWheel = carData.visualWheels.frontLeft; break;
-                case 1: visualWheel = carData.visualWheels.frontRight; break;
-                case 2: visualWheel = carData.visualWheels.rearLeft; break;
-                case 3: visualWheel = carData.visualWheels.rearRight; break;
-            }
+        //     // Match index to visual wheel object (Ensure this order matches createCar)
+        //     switch (i) {
+        //         case 0: visualWheel = carData.visualWheels.frontLeft; break;
+        //         case 1: visualWheel = carData.visualWheels.frontRight; break;
+        //         case 2: visualWheel = carData.visualWheels.rearLeft; break;
+        //         case 3: visualWheel = carData.visualWheels.rearRight; break;
+        //     }
 
-            if (visualWheel) {
-                visualWheel.position.copy(transform.position as unknown as THREE.Vector3);
-                visualWheel.quaternion.copy(transform.quaternion as unknown as THREE.Quaternion);
-            } 
-            // Optional: Add a less frequent log if a wheel is missing
-            // else if (i === 0 && clock.elapsedTime % 5 < dt) { 
-            //     console.warn(`Visual wheel mesh (e.g., 'Wheel_Front_Left') not found or named incorrectly in GLB.`);
-            // }
-        }
+        //     if (visualWheel) {
+        //         visualWheel.position.copy(transform.position as unknown as THREE.Vector3);
+        //         visualWheel.quaternion.copy(transform.quaternion as unknown as THREE.Quaternion);
+        //     } 
+        //     // Optional: Add a less frequent log if a wheel is missing
+        //     // else if (i === 0 && clock.elapsedTime % 5 < dt) { 
+        //     //     console.warn(`Visual wheel mesh (e.g., 'Wheel_Front_Left') not found or named incorrectly in GLB.`);
+        //     // }
+        // }
         
         // --- Update OrbitControls Target --- 
         orbitControls.target.copy(carData.mesh.position); // Make the controls orbit around the car's current position
