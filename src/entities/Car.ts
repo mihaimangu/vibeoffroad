@@ -9,7 +9,7 @@ export interface CarPhysics {
     vehicle: CANNON.RaycastVehicle;
 }
 
-// Updated return type to potentially include named visual wheel nodes
+// Updated return type to include brake lights
 export interface CarData {
     mesh: THREE.Group;
     physics: CarPhysics;
@@ -19,6 +19,10 @@ export interface CarData {
         rearLeft: THREE.Object3D | undefined;
         rearRight: THREE.Object3D | undefined;
     };
+    brakeLights: {
+        left: THREE.PointLight;
+        right: THREE.PointLight;
+    }
 }
 
 export async function createCar(world: CANNON.World, materials: PhysicsMaterials): Promise<CarData> {
@@ -120,6 +124,28 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
 
     vehicle.addToWorld(world);
 
+    // --- Brake Lights Setup --- 
+    const brakeLightIntensity = 2; // Adjust intensity
+    const brakeLightDistance = 5;  // Adjust how far the light reaches
+    const brakeLightColor = 0xff0000; // Red
+
+    const brakeLightL = new THREE.PointLight(brakeLightColor, 0, brakeLightDistance); // Start OFF (intensity 0)
+    brakeLightL.castShadow = false; // Optional: disable shadows for performance
+    // Position guesses (relative to car center) - Adjust these!
+    // X: negative for left, Y: height, Z: negative for rear
+    brakeLightL.position.set(-chassisWidth * 0.4, chassisHeight * 0.4, -chassisLength * 0.5);
+    carMesh.add(brakeLightL); // Add light as child of car mesh
+
+    const brakeLightR = new THREE.PointLight(brakeLightColor, 0, brakeLightDistance); // Start OFF
+    brakeLightR.castShadow = false;
+    // Position guesses (relative to car center)
+    // X: positive for right, Y: height, Z: negative for rear
+    brakeLightR.position.set(chassisWidth * 0.4, chassisHeight * 0.4, -chassisLength * 0.5);
+    carMesh.add(brakeLightR);
+
+    // Store lights for later control
+    const brakeLights = { left: brakeLightL, right: brakeLightR };
+
     // Store physics components
     const carPhysics: CarPhysics = {
         chassisBody,
@@ -130,6 +156,7 @@ export async function createCar(world: CANNON.World, materials: PhysicsMaterials
     return {
         mesh: carMesh,
         physics: carPhysics,
-        visualWheels
+        visualWheels,
+        brakeLights
     };
 } 

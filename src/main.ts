@@ -92,7 +92,9 @@ async function initializeGame() {
         scene.add(carData.mesh);
 
         // Instantiate VehicleControls *after* car is created
-        vehicleControls = new VehicleControls(carData.physics);
+        console.log("[main.ts] Instantiating VehicleControls with carData:", carData); // Log changed
+        // Pass the full carData object now
+        vehicleControls = new VehicleControls(carData);
 
         // Instantiate FollowCamera *after* car mesh is available
         followCamera = new FollowCamera(camera, carData.mesh);

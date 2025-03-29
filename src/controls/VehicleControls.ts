@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es';
-import { CarPhysics } from '../entities/Car'; // Import the updated interface
+import { CarPhysics, CarData } from '../entities/Car'; // Import the updated interface
 
 // Interface to track the state of controls
 interface ControlState {
@@ -11,12 +11,16 @@ interface ControlState {
 
 export class VehicleControls {
     private carPhysics: CarPhysics;
+    // Store reference to CarData to access lights
+    private carData: CarData;
     private controlState: ControlState;
     private parkingBrakeEngaged: boolean = false; // State for parking brake
+    private isBraking: boolean = false; // Track if normal brake is applied
     private maxForce: number = 2000; // *** Increased driving force significantly *** 
     private maxSteerValue: number = 0.5; // Max steering angle in radians (approx 30 degrees)
     private maxBrakeForce: number = 150; // Braking force
     private parkingBrakeLockForce: number = 10000; // Very strong force for parking brake
+    private brakeLightIntensity: number = 2; // Match value from Car.ts
     private currentSteering: number = 0; // For smooth steering
     private steeringLerpFactor: number = 0.1; // How quickly the steering turns
 
@@ -29,8 +33,9 @@ export class VehicleControls {
         parkingBrake: HTMLElement | null; // Add parking brake element
     };
 
-    constructor(carPhysics: CarPhysics) {
-        this.carPhysics = carPhysics; // Store the physics object containing the vehicle
+    constructor(carData: CarData) {
+        this.carData = carData; // Store full CarData
+        this.carPhysics = carData.physics; // Extract physics
         this.controlState = {
             forward: false,
             backward: false,
@@ -142,11 +147,8 @@ export class VehicleControls {
 
         // --- Apply/Check Parking Brake FIRST --- 
         this.applyParkingBrakePhysics();
-        // If parking brake is on, don't process other inputs
         if (this.parkingBrakeEngaged) {
-            // Maybe also zero out steering?
-            // vehicle.setSteeringValue(0, 0);
-            // vehicle.setSteeringValue(0, 1);
+            this.setBrakeLightState(true); // Turn lights ON for parking brake
             return; // Stop further processing
         }
 
@@ -165,6 +167,7 @@ export class VehicleControls {
         // --- Acceleration / Normal Braking (Only if parking brake is OFF) --- 
         let engineForce = 0;
         let brakeForce = 0; // Normal braking force
+        this.isBraking = false; // Reset braking state for this frame
 
         if (this.controlState.forward) {
             engineForce = -this.maxForce; // *** Inverted sign for forward motion ***
@@ -184,6 +187,7 @@ export class VehicleControls {
         const forwardVelocity = vehicle.chassisBody.velocity.dot(vehicle.chassisBody.vectorToWorldFrame(new CANNON.Vec3(0, 0, 1)));
         if (this.controlState.backward && forwardVelocity > 0.1) { // Brake if pressing S while moving forward
              brakeForce = this.maxBrakeForce;
+             this.isBraking = true; // Set braking state
         } else if (!this.controlState.forward && !this.controlState.backward) {
              // Optional: Apply slight brake when coasting to simulate drag
              // brakeForce = 5;
@@ -195,39 +199,17 @@ export class VehicleControls {
         vehicle.setBrake(brakeForce, 2);
         vehicle.setBrake(brakeForce, 3);
 
-        // --- (Old Hinge Constraint Logic - REMOVED) ---
-        // let force = 0;
-        // if (this.controlState.forward) {
-        //     force = -this.maxForce; // Apply force to rotate wheels forward (adjust sign if needed)
-        // }
-        // if (this.controlState.backward) {
-        //     force = this.maxForce; // Apply force to rotate wheels backward
-        // }
+        // --- Update Brake Lights --- 
+        // Turn lights ON if normal braking OR parking brake is on (handled earlier)
+        this.setBrakeLightState(this.isBraking);
+    }
 
-        // // Example: Apply drive torque only to rear wheels (assuming indices 2 and 3)
-        // if (this.carPhysics.wheelConstraints.length > 3) {
-        //     this.carPhysics.wheelConstraints[2].enableMotor();
-        //     this.carPhysics.wheelConstraints[2].setMotorSpeed(force * (deltaTime * 60)); // Adjust speed based on framerate
-        //     this.carPhysics.wheelConstraints[2].setMotorMaxForce(Math.abs(force) > 0 ? this.maxForce : 0);
-
-        //     this.carPhysics.wheelConstraints[3].enableMotor();
-        //     this.carPhysics.wheelConstraints[3].setMotorSpeed(force * (deltaTime * 60));
-        //     this.carPhysics.wheelConstraints[3].setMotorMaxForce(Math.abs(force) > 0 ? this.maxForce : 0);
-        // } else {
-        //     console.warn("Not enough wheel constraints found for driving.");
-        // }
-
-        // // Basic Steering (applying torque to chassis - now handled by RaycastVehicle)
-        // let torque = 0;
-        // const steerStrength = 250; // Adjust as needed
-        // if (this.controlState.left) {
-        //     torque = steerStrength;
-        // }
-        // if (this.controlState.right) {
-        //     torque = -steerStrength;
-        // }
-        // // Apply torque around the world's Y-axis (or chassis's local Y)
-        // this.carPhysics.chassisBody.torque.y += torque * deltaTime;
-
+    // Helper method to turn brake lights on/off
+    private setBrakeLightState(isOn: boolean): void {
+        const intensity = isOn ? this.brakeLightIntensity : 0;
+        if (this.carData.brakeLights) {
+            if (this.carData.brakeLights.left) this.carData.brakeLights.left.intensity = intensity;
+            if (this.carData.brakeLights.right) this.carData.brakeLights.right.intensity = intensity;
+        }
     }
 } 
