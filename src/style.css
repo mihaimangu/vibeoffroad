@@ -28,3 +28,7 @@
 #reset-button{
     pointer-events: auto;
 }
+
+#parking-brake-button{
+    pointer-events: auto;
+}

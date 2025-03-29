@@ -12,9 +12,11 @@ interface ControlState {
 export class VehicleControls {
     private carPhysics: CarPhysics;
     private controlState: ControlState;
+    private parkingBrakeEngaged: boolean = false; // State for parking brake
     private maxForce: number = 2000; // *** Increased driving force significantly *** 
     private maxSteerValue: number = 0.5; // Max steering angle in radians (approx 30 degrees)
     private maxBrakeForce: number = 150; // Braking force
+    private parkingBrakeLockForce: number = 10000; // Very strong force for parking brake
     private currentSteering: number = 0; // For smooth steering
     private steeringLerpFactor: number = 0.1; // How quickly the steering turns
 
@@ -24,6 +26,7 @@ export class VehicleControls {
         down: HTMLElement | null;
         left: HTMLElement | null;
         right: HTMLElement | null;
+        parkingBrake: HTMLElement | null; // Add parking brake element
     };
 
     constructor(carPhysics: CarPhysics) {
@@ -39,7 +42,8 @@ export class VehicleControls {
             up: document.getElementById('control-up'),
             down: document.getElementById('control-down'),
             left: document.getElementById('control-left'),
-            right: document.getElementById('control-right')
+            right: document.getElementById('control-right'),
+            parkingBrake: document.getElementById('parking-brake-button') // Find parking brake button
         };
         
         this.setupKeyboardListeners();
@@ -49,6 +53,12 @@ export class VehicleControls {
     private setupKeyboardListeners() {
         window.addEventListener('keydown', (event) => this.handleKey(event, true));
         window.addEventListener('keyup', (event) => this.handleKey(event, false));
+        // Optional: Add keyboard shortcut for parking brake (e.g., 'P')
+        window.addEventListener('keypress', (event) => {
+             if (event.key.toUpperCase() === 'P') {
+                 this.toggleParkingBrake();
+             }
+        });
     }
 
     private handleKey(event: KeyboardEvent, isKeyDown: boolean) {
@@ -97,12 +107,50 @@ export class VehicleControls {
         if (this.uiElements.down) this.uiElements.down.classList.toggle('active', this.controlState.backward);
         if (this.uiElements.left) this.uiElements.left.classList.toggle('active', this.controlState.left);
         if (this.uiElements.right) this.uiElements.right.classList.toggle('active', this.controlState.right);
+        // Update parking brake button style
+        if (this.uiElements.parkingBrake) this.uiElements.parkingBrake.classList.toggle('active', this.parkingBrakeEngaged);
+    }
+
+    // Method to toggle the parking brake state
+    public toggleParkingBrake(): void {
+        this.parkingBrakeEngaged = !this.parkingBrakeEngaged;
+        console.log("Parking Brake:", this.parkingBrakeEngaged ? "ON" : "OFF");
+        this.updateUI(); // Update button appearance
+        // Immediately apply/release brake in physics if toggled
+        this.applyParkingBrakePhysics(); 
+    }
+
+    // New method to apply/release parking brake in physics
+    private applyParkingBrakePhysics(): void {
+        if (!this.carPhysics?.vehicle) return;
+        const vehicle = this.carPhysics.vehicle;
+        const brakeForceToApply = this.parkingBrakeEngaged ? this.parkingBrakeLockForce : 0;
+
+        vehicle.setBrake(brakeForceToApply, 0);
+        vehicle.setBrake(brakeForceToApply, 1);
+        vehicle.setBrake(brakeForceToApply, 2);
+        vehicle.setBrake(brakeForceToApply, 3);
     }
 
     public update(deltaTime: number): void {
+        // Check physics and vehicle at start of update
+        if (!this.carPhysics?.vehicle) {
+            console.error("[VehicleControls.ts] Update called but this.carPhysics.vehicle is missing!");
+            return; 
+        }
         const vehicle = this.carPhysics.vehicle;
 
-        // --- Steering --- 
+        // --- Apply/Check Parking Brake FIRST --- 
+        this.applyParkingBrakePhysics();
+        // If parking brake is on, don't process other inputs
+        if (this.parkingBrakeEngaged) {
+            // Maybe also zero out steering?
+            // vehicle.setSteeringValue(0, 0);
+            // vehicle.setSteeringValue(0, 1);
+            return; // Stop further processing
+        }
+
+        // --- Steering (Only if parking brake is OFF) --- 
         let targetSteering = 0;
         if (this.controlState.left) {
             targetSteering = this.maxSteerValue;
@@ -114,9 +162,9 @@ export class VehicleControls {
         vehicle.setSteeringValue(this.currentSteering, 0); // Front left wheel (index 0)
         vehicle.setSteeringValue(this.currentSteering, 1); // Front right wheel (index 1)
 
-        // --- Acceleration / Braking --- 
+        // --- Acceleration / Normal Braking (Only if parking brake is OFF) --- 
         let engineForce = 0;
-        let brakeForce = 0;
+        let brakeForce = 0; // Normal braking force
 
         if (this.controlState.forward) {
             engineForce = -this.maxForce; // *** Inverted sign for forward motion ***

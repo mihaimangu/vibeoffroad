@@ -248,6 +248,7 @@ initializeGame().then(() => {
         console.log("Starting animation loop.");
         resetCar();
         animate();
+        setupEventListeners();
     } else {
         console.error("Initialization check failed before starting animation loop.");
         // Display error message on the page if desired
@@ -256,19 +257,33 @@ initializeGame().then(() => {
     console.error("Initialization promise failed:", err);
 }); 
 
-// --- Add Event Listener for Reset Button ---
-document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOMContentLoaded event fired."); // Log 1: Did the event fire?
+// --- Attach Event Listeners AFTER Initialization ---
+function setupEventListeners() {
+     console.log("Setting up event listeners...");
+    // --- Reset Button Listener --- 
     const resetButton = document.getElementById('reset-button');
-    
     if (resetButton) {
-        console.log("Reset button element FOUND."); // Log 2: Did we find the element?
+        console.log("Reset button element FOUND.");
         resetButton.addEventListener('click', () => {
-            console.log("Reset button CLICKED - Listener is working!"); // Log 3: Did the click register?
+            console.log("Reset button CLICKED - Listener is working!");
             resetCar(); // Call the reset function
         });
     } else {
-        // This log is important!
-        console.warn("Reset button element NOT FOUND! Check index.html for typo in id='reset-button' or script timing."); 
+        console.warn("Reset button element NOT FOUND! Check index.html for typo in id='reset-button'."); 
     }
-}); 
+
+    // --- Parking Brake Button Listener --- 
+    const parkingBrakeButton = document.getElementById('parking-brake-button');
+    // We know vehicleControls exists if we call this function after successful init
+    if (parkingBrakeButton && vehicleControls) {
+         console.log("Parking brake button element FOUND.");
+         parkingBrakeButton.addEventListener('click', () => {
+             console.log("Parking brake button CLICKED");
+             vehicleControls!.toggleParkingBrake(); // Use non-null assertion or ensure check
+         });
+    } else {
+         if (!parkingBrakeButton) console.warn("Parking brake button element NOT FOUND!");
+         // This case should ideally not happen if called correctly
+         else console.warn("VehicleControls instance missing when setting up parking brake listener!"); 
+    }
+} 
