@@ -60,49 +60,95 @@ export function createCar(world: CANNON.World, materials: PhysicsMaterials): {
     carGroup.add(carCabinMesh);
 
     // --- Wheels --- 
-    const wheelMeshes: THREE.Mesh[] = [];
+    const wheelMeshes: THREE.Group[] = [];
     const wheelBodies: CANNON.Body[] = [];
     const wheelPositions = [
         // Front Left 
-        new CANNON.Vec3(-chassisWidth / 2 - wheelThickness / 2, wheelRadius, chassisLength / 2 * 0.7), 
+        new CANNON.Vec3(-chassisWidth / 2 - wheelThickness / 2, 0, chassisLength / 2 * 0.7), // Pivot Y = 0 relative to chassis center 
         // Front Right
-        new CANNON.Vec3( chassisWidth / 2 + wheelThickness / 2, wheelRadius, chassisLength / 2 * 0.7), 
+        new CANNON.Vec3( chassisWidth / 2 + wheelThickness / 2, 0, chassisLength / 2 * 0.7), 
         // Rear Left
-        new CANNON.Vec3(-chassisWidth / 2 - wheelThickness / 2, wheelRadius, -chassisLength / 2 * 0.7), 
+        new CANNON.Vec3(-chassisWidth / 2 - wheelThickness / 2, 0, -chassisLength / 2 * 0.7), 
         // Rear Right
-        new CANNON.Vec3( chassisWidth / 2 + wheelThickness / 2, wheelRadius, -chassisLength / 2 * 0.7), 
+        new CANNON.Vec3( chassisWidth / 2 + wheelThickness / 2, 0, -chassisLength / 2 * 0.7), 
     ];
 
-    // Create wheel mesh geometry once
-    const wheelMeshGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 18);
-    wheelMeshGeometry.rotateZ(Math.PI / 2); // Align with Cannon sphere/cylinder orientation
+    // Create wheel materials once
+    const tireMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x222222, // Dark grey/black tire
+        roughness: 0.9, 
+        metalness: 0.1 
+    });
+    const rimMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xaaaaaa, // Light grey rim
+        roughness: 0.3, 
+        metalness: 0.8 
+    });
+
+    // Create wheel geometries once
+    const tireGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 24);
+    tireGeometry.rotateX(Math.PI / 2); // Align with THREE Y-up convention
+    const rimRadius = wheelRadius * 0.7;
+    const rimThickness = wheelThickness * 1.1; // Slightly wider than tire
+    const rimGeometry = new THREE.CylinderGeometry(rimRadius, rimRadius, rimThickness, 16);
+    rimGeometry.rotateX(Math.PI / 2); 
+
+    // Define the hinge axis (local X-axis for the wheels)
+    const wheelAxis = new CANNON.Vec3(1, 0, 0);
 
     wheelPositions.forEach((pos, index) => {
-        // Create Mesh
-        const wheelMesh = new THREE.Mesh(wheelMeshGeometry, wheelMaterial);
-        // Position mesh visually relative to the carGroup origin
-        wheelMesh.position.set(pos.x, pos.y, pos.z);
-        // wheelMesh.castShadow = true;
-        wheelMeshes.push(wheelMesh);
-        carGroup.add(wheelMesh);
+        // --- Create Wheel Visual Group ---
+        const wheelGroup = new THREE.Group();
 
-        // Create Physics Body
+        // Create Tire Mesh
+        const tireMesh = new THREE.Mesh(tireGeometry, tireMaterial);
+        // tireMesh.castShadow = true;
+        // tireMesh.receiveShadow = true;
+        wheelGroup.add(tireMesh);
+
+        // Create Rim Mesh
+        const rimMesh = new THREE.Mesh(rimGeometry, rimMaterial);
+        // rimMesh.castShadow = true;
+        // rimMesh.receiveShadow = true;
+        // Rim might need slight Z offset if thickness differs significantly, but should be centered otherwise
+        wheelGroup.add(rimMesh); 
+
+        // Position the visual wheel group relative to the carGroup origin
+        wheelGroup.position.set(pos.x, pos.y + wheelRadius, pos.z); // Visual Y offset by radius
+        wheelMeshes.push(wheelGroup); // Add the group
+        carGroup.add(wheelGroup);
+        // --- End of Wheel Visual Group ---
+
+        // Calculate world position for the wheel body
+        const wheelWorldPos = chassisBody.position.clone().vadd(pos); 
+        wheelWorldPos.y = wheelRadius; // Ensure wheel body starts at correct height
+
+        // Create Physics Body (still using Sphere shape)
         const wheelBody = new CANNON.Body({
             mass: wheelMass,
             material: materials.wheelMaterial,
             shape: wheelShape, 
-             // Position physics body in world space (relative to chassis body's initial position)
-            position: chassisBody.position.clone().vadd(pos) 
+            position: wheelWorldPos,
+            angularDamping: 0.5 // Add some damping to prevent infinite spinning
         });
-        // Initial orientation for wheels (important for hinge constraints later)
-        wheelBody.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI / 2);
         world.addBody(wheelBody);
         wheelBodies.push(wheelBody);
+
+        // Create Hinge Constraint (remains the same)
+        const constraint = new CANNON.HingeConstraint(chassisBody, wheelBody, {
+            pivotA: pos,                      
+            pivotB: new CANNON.Vec3(0, 0, 0), 
+            axisA: wheelAxis,                 
+            axisB: wheelAxis                  
+        });
+        world.addConstraint(constraint);
     });
 
     // Position the entire car visual group (initial visual position)
-    // This might not perfectly match physics start if chassisBody starts higher
-    carGroup.position.y = 0; 
+    // This should align with the physics chassis initial position for consistency
+    carGroup.position.copy(chassisBody.position as any);
+    carGroup.position.y = 0; // Reset visual group Y pos, meshes are positioned relative to it
+    carGroup.quaternion.copy(chassisBody.quaternion as any);
 
     // TODO: Replace with actual GLTF model loading
     // TODO: Add CANNON.RaycastVehicle or HingeConstraints for proper vehicle physics

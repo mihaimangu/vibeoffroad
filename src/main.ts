@@ -37,7 +37,8 @@ const carWheelBodies = carData.physics.wheelBodies;
 // Store car meshes for syncing (assuming order matches wheel bodies)
 const carChassisMesh = carData.mesh.children[0] as THREE.Mesh; // Assuming chassis is first child
 // NOTE: This relies on the structure in createCar. A more robust way would be to return named meshes.
-const carWheelMeshes = carData.mesh.children.slice(2) as THREE.Mesh[]; // Assuming wheels start after body+cabin
+// Wheels are now groups, starting after body + cabin
+const carWheelGroups = carData.mesh.children.slice(2) as THREE.Group[]; 
 
 // Get terrain dimensions 
 const terrainWidth = 200;
@@ -73,11 +74,12 @@ function animate() {
     carChassisMesh.position.copy(carChassisBody.position as any);
     carChassisMesh.quaternion.copy(carChassisBody.quaternion as any);
 
-    // Sync wheels
+    // Sync wheels (now groups)
     for (let i = 0; i < carWheelBodies.length; i++) {
-        if (carWheelMeshes[i]) { // Check if mesh exists
-            carWheelMeshes[i].position.copy(carWheelBodies[i].position as any);
-            carWheelMeshes[i].quaternion.copy(carWheelBodies[i].quaternion as any);
+        if (carWheelGroups[i]) { // Check if group exists
+            // Apply physics body transform to the entire wheel group
+            carWheelGroups[i].position.copy(carWheelBodies[i].position as any);
+            carWheelGroups[i].quaternion.copy(carWheelBodies[i].quaternion as any);
         }
     }
 
